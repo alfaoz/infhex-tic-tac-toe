@@ -214,6 +214,7 @@ function GameScreen({
     hoveredCell: null,
     scale: DEFAULT_SCALE
   })
+  const [isMobileHudOpen, setIsMobileHudOpen] = useState(true)
   const [turnCountdownMs, setTurnCountdownMs] = useState<number | null>(TURN_TIMEOUT_MS)
 
   const cellMap = useMemo(() => {
@@ -759,38 +760,51 @@ function GameScreen({
             </div>
           )}
 
-          {interactionEnabled && (
-            <div className="pointer-events-auto z-10 absolute bottom-3 left-3 right-3 flex flex-wrap justify-end gap-2 md:left-auto md:right-3">
+          {interactionEnabled && !isMobileHudOpen && (
+            <div className="pointer-events-auto absolute right-3 bottom-3 z-10 md:hidden">
               <button
-                onClick={onLeave}
-                className="min-w-[9rem] flex-1 rounded-full bg-red-500 px-4 py-2 font-medium shadow-lg hover:bg-red-400 md:flex-none"
+                onClick={() => setIsMobileHudOpen(true)}
+                aria-label={'Open HUD'}
+                title={'Open HUD'}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700/95 shadow-lg transition hover:bg-slate-600"
               >
-                Leave Game
-              </button>
-              <button
-                onClick={() => {
-                  viewRef.current = { offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE }
-                  scheduleDraw()
-                }}
-                className="min-w-[9rem] flex-1 rounded-full bg-sky-600 px-4 py-2 font-medium shadow-lg hover:bg-sky-500 md:flex-none"
-              >
-                Reset View
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M5 8h14" />
+                  <path d="M5 12h14" />
+                  <path d="M5 16h14" />
+                </svg>
               </button>
             </div>
           )}
 
           {interactionEnabled && (
-            <div className="
-            pointer-events-auto absolute w-auto md:rounded-tr-[1.5rem] 
-            bg-slate-800 px-4 py-4 text-left 
-            shadow-[0_12px_45px_rgba(15,23,42,0.22)] backdrop-blur-md 
+            <div
+              className={`
+            pointer-events-auto absolute w-auto bg-slate-800 px-4 py-4 text-left
+            shadow-[0_12px_45px_rgba(15,23,42,0.22)] backdrop-blur-md transition-transform duration-300 ease-out
             left-0
             right-0
             bottom-0
-            pb-20
+            rounded-t-[1.5rem]
+            ${isMobileHudOpen ? 'translate-y-0' : 'translate-y-full'}
 
-            md:left-0 md:w-full md:max-w-sm
-            ">
+            pb-4 md:left-0 md:w-full md:max-w-sm md:translate-y-0 md:rounded-tl-none md:rounded-tr-[1.5rem]
+            `}
+            >
+              <div className="pointer-events-auto absolute right-3 top-3 z-10 md:hidden">
+                <button
+                  onClick={() => setIsMobileHudOpen(false)}
+                  aria-expanded={isMobileHudOpen}
+                  aria-label={isMobileHudOpen ? 'Close HUD' : 'Open HUD'}
+                  title={isMobileHudOpen ? 'Close HUD' : 'Open HUD'}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700/95 shadow-lg transition hover:bg-slate-600"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M6 6 18 18" />
+                    <path d="M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
               <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
               <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tic-Tac-Toe</h1>
               <div className="mt-2 text-sm text-slate-300">
@@ -826,6 +840,25 @@ function GameScreen({
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
                   <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
                 </div> */}
+              </div>
+
+
+              <div className={`pointer-events-auto mt-4 grid grid-cols-2 gap-2`}>
+                <button
+                  onClick={onLeave}
+                  className="min-w-[9rem] flex-1 rounded-full bg-red-500 px-4 py-2 font-medium shadow-lg hover:bg-red-400 md:flex-none"
+                >
+                  Leave Game
+                </button>
+                <button
+                  onClick={() => {
+                    viewRef.current = { offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE }
+                    scheduleDraw()
+                  }}
+                  className="min-w-[9rem] flex-1 rounded-full bg-sky-600 px-4 py-2 font-medium shadow-lg hover:bg-sky-500 md:flex-none"
+                >
+                  Reset View
+                </button>
               </div>
             </div>
           )}
