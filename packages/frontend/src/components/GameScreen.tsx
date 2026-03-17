@@ -11,6 +11,7 @@ const SQRT_THREE = Math.sqrt(3)
 const GRID_LINE_COLOR = 'rgba(148, 163, 184, 0.18)'
 const ORIGIN_LINE_COLOR = 'rgba(125, 211, 252, 0.55)'
 const DRAG_THRESHOLD_PX = 6
+const MOUSE_AFTER_TOUCH_IGNORE_MS = 500
 
 interface ViewState {
   offsetX: number
@@ -201,6 +202,8 @@ function GameScreen({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragStateRef = useRef<DragState | null>(null)
   const pinchStateRef = useRef<PinchState | null>(null)
+  const suppressTouchPlacementRef = useRef(false)
+  const lastTouchInteractionAtRef = useRef(0)
   const viewRef = useRef<ViewState>({ offsetX: 0, offsetY: 0, scale: DEFAULT_SCALE })
   const hoveredCellRef = useRef<HexCell | null>(null)
   const animationFrameRef = useRef<number | null>(null)
@@ -374,11 +377,11 @@ function GameScreen({
       context.fillStyle = getPlayerColor(cell.occupiedBy)
       context.fill()
 
-      context.fillStyle = '#e2e8f0'
-      context.font = `${Math.max(11, scale * 0.24)}px ui-sans-serif, system-ui, sans-serif`
-      context.textAlign = 'center'
-      context.textBaseline = 'middle'
-      context.fillText(cell.occupiedBy.slice(0, 2).toUpperCase(), screenX, screenY + 1)
+      // context.fillStyle = '#e2e8f0'
+      // context.font = `${Math.max(11, scale * 0.24)}px ui-sans-serif, system-ui, sans-serif`
+      // context.textAlign = 'center'
+      // context.textBaseline = 'middle'
+      // context.fillText(cell.occupiedBy.slice(0, 2).toUpperCase(), screenX, screenY + 1)
     }
   }
 
@@ -440,6 +443,13 @@ function GameScreen({
     pinchStateRef.current = null
   }
 
+  const markTouchInteraction = () => {
+    lastTouchInteractionAtRef.current = Date.now()
+  }
+
+  const shouldIgnoreMouseEvent = () =>
+    Date.now() - lastTouchInteractionAtRef.current < MOUSE_AFTER_TOUCH_IGNORE_MS
+
   useEffect(() => {
     scheduleDraw()
   }, [boardState, renderableCells, renderableCellSet, cellMap])
@@ -491,7 +501,7 @@ function GameScreen({
           : 'cursor-default'
           }`}
         onMouseDown={(event) => {
-          if (!interactionEnabled) {
+          if (!interactionEnabled || shouldIgnoreMouseEvent()) {
             return
           }
 
@@ -504,7 +514,7 @@ function GameScreen({
           }
         }}
         onMouseMove={(event) => {
-          if (!interactionEnabled) {
+          if (!interactionEnabled || shouldIgnoreMouseEvent()) {
             return
           }
 
@@ -533,7 +543,7 @@ function GameScreen({
           scheduleDraw()
         }}
         onMouseLeave={() => {
-          if (!interactionEnabled) {
+          if (!interactionEnabled || shouldIgnoreMouseEvent()) {
             return
           }
 
@@ -544,7 +554,7 @@ function GameScreen({
           }
         }}
         onMouseUp={(event) => {
-          if (!interactionEnabled) {
+          if (!interactionEnabled || shouldIgnoreMouseEvent()) {
             return
           }
 
@@ -576,7 +586,11 @@ function GameScreen({
             return
           }
 
+          event.preventDefault()
+          markTouchInteraction()
+
           if (event.touches.length === 1) {
+            suppressTouchPlacementRef.current = false
             const touch = event.touches[0]
             hoveredCellRef.current = screenToCell(touch.clientX, touch.clientY)
             dragStateRef.current = {
@@ -584,13 +598,14 @@ function GameScreen({
               startY: touch.clientY,
               originOffsetX: viewRef.current.offsetX,
               originOffsetY: viewRef.current.offsetY,
-              moved: true
+              moved: false
             }
             pinchStateRef.current = null
             scheduleDraw()
             return
           }
 
+          suppressTouchPlacementRef.current = true
           const canvas = canvasRef.current
           const center = getTouchCenter(event.touches)
           const distance = getTouchDistance(event.touches)
@@ -614,7 +629,11 @@ function GameScreen({
             return
           }
 
+          event.preventDefault()
+          markTouchInteraction()
+
           if (event.touches.length >= 2) {
+            suppressTouchPlacementRef.current = true
             const pinchState = pinchStateRef.current
             const canvas = canvasRef.current
             const center = getTouchCenter(event.touches)
@@ -667,7 +686,11 @@ function GameScreen({
             return
           }
 
+          event.preventDefault()
+          markTouchInteraction()
+
           if (event.touches.length >= 2) {
+            suppressTouchPlacementRef.current = true
             const canvas = canvasRef.current
             const center = getTouchCenter(event.touches)
             const distance = getTouchDistance(event.touches)
@@ -704,15 +727,19 @@ function GameScreen({
 
           const dragState = dragStateRef.current
           const lastTouch = event.changedTouches[0]
-          if (dragState && !dragState.moved && lastTouch) {
+          if (!suppressTouchPlacementRef.current && dragState && !dragState.moved && lastTouch) {
             tryPlaceCellAtClientPoint(lastTouch.clientX, lastTouch.clientY)
           }
 
+          suppressTouchPlacementRef.current = false
           hoveredCellRef.current = null
           clearInteractionState()
           scheduleDraw()
         }}
-        onTouchCancel={() => {
+        onTouchCancel={(event) => {
+          event.preventDefault()
+          markTouchInteraction()
+          suppressTouchPlacementRef.current = false
           hoveredCellRef.current = null
           clearInteractionState()
           scheduleDraw()
