@@ -71,7 +71,9 @@ function emitGameState(sessionId: string): void {
     io.to(sessionId).emit('game-state', {
         sessionId,
         gameState: {
-            cells: getBoardCells(session)
+            cells: getBoardCells(session),
+            currentTurnPlayerId: session.gameState.currentTurnPlayerId,
+            placementsRemaining: session.gameState.placementsRemaining
         }
     });
 }
@@ -93,8 +95,14 @@ function broadcastSessions(): void {
 function updateSessionState(session: GameSession): SessionState {
     if (session.players.length >= session.maxPlayers) {
         session.state = 'ingame';
+        if (!session.gameState.currentTurnPlayerId) {
+            session.gameState.currentTurnPlayerId = session.players[0] ?? null;
+            session.gameState.placementsRemaining = 2;
+        }
     } else if (session.state !== 'finished') {
         session.state = 'lobby';
+        session.gameState.currentTurnPlayerId = null;
+        session.gameState.placementsRemaining = 0;
     }
 
     return session.state;
@@ -136,7 +144,9 @@ app.post('/api/sessions', express.json(), (_req, res) => {
         maxPlayers: 2,
         state: 'lobby',
         gameState: {
-            cells: []
+            cells: [],
+            currentTurnPlayerId: null,
+            placementsRemaining: 0
         }
     };
 
@@ -232,6 +242,16 @@ io.on('connection', (socket) => {
             return;
         }
 
+        if (session.gameState.currentTurnPlayerId !== socket.id) {
+            socket.emit('error', 'It is not your turn');
+            return;
+        }
+
+        if (session.gameState.placementsRemaining <= 0) {
+            socket.emit('error', 'No placements remaining this turn');
+            return;
+        }
+
         const cellKey = getCellKey(data.x, data.y);
         const isOccupied = session.gameState.cells.some((cell) => getCellKey(cell.x, cell.y) === cellKey);
         if (isOccupied) {
@@ -244,6 +264,14 @@ io.on('connection', (socket) => {
             y: data.y,
             occupiedBy: socket.id
         });
+
+        session.gameState.placementsRemaining -= 1;
+        if (session.gameState.placementsRemaining === 0) {
+            const currentPlayerIndex = session.players.indexOf(socket.id);
+            const nextPlayerIndex = currentPlayerIndex === 0 ? 1 : 0;
+            session.gameState.currentTurnPlayerId = session.players[nextPlayerIndex] ?? socket.id;
+            session.gameState.placementsRemaining = 2;
+        }
 
         emitGameState(data.sessionId);
     });

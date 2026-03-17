@@ -9,6 +9,8 @@ export interface BoardCell {
 
 export interface BoardState {
     cells: BoardCell[];
+    currentTurnPlayerId: string | null;
+    placementsRemaining: number;
 }
 
 // Game Session Types

@@ -49,6 +49,7 @@ interface GameScreenProps {
   sessionId: string
   players: string[]
   isHost: boolean
+  currentPlayerId: string
   boardState: BoardState
   onPlaceCell: (x: number, y: number) => void
   onLeave: () => void
@@ -135,6 +136,7 @@ function GameScreen({
   sessionId,
   players,
   isHost,
+  currentPlayerId,
   boardState,
   onPlaceCell,
   onLeave
@@ -188,6 +190,9 @@ function GameScreen({
   const renderableCellSet = useMemo(() => {
     return new Set(renderableCells.map((cell) => cell.key))
   }, [renderableCells])
+
+  const ownColor = getPlayerColor(currentPlayerId || (isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest'))
+  const isOwnTurn = Boolean(currentPlayerId) && boardState.currentTurnPlayerId === currentPlayerId
 
   latestDataRef.current = {
     boardState,
@@ -418,7 +423,7 @@ function GameScreen({
           }
 
           const cellKey = getCellKey(targetCell.x, targetCell.y)
-          if (renderableCellSet.has(cellKey) && !cellMap.has(cellKey)) {
+          if (isOwnTurn && renderableCellSet.has(cellKey) && !cellMap.has(cellKey)) {
             onPlaceCell(targetCell.x, targetCell.y)
           }
         }}
@@ -461,9 +466,9 @@ function GameScreen({
                   <div className="mt-1 flex items-center gap-2.5 text-white">
                     <span
                       className="h-3.5 w-3.5 rounded-full border border-white/20"
-                      style={{ backgroundColor: getPlayerColor(isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest') }}
+                      style={{ backgroundColor: ownColor }}
                     />
-                    <span>{getPlayerColor(isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest')}</span>
+                    <span>{ownColor}</span>
                   </div>
                 </div>
 
@@ -477,6 +482,12 @@ function GameScreen({
                 <div className="border-l border-white/18 pl-3">
                   <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
                   <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
+                </div>
+
+                <div className="border-l border-white/18 pl-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Turn</div>
+                  <div className="mt-1 text-white">{isOwnTurn ? 'Your turn' : 'Opponent turn'}</div>
+                  <div className="text-slate-300">{boardState.placementsRemaining} placements left</div>
                 </div>
               </div>
             </div>

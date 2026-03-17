@@ -15,9 +15,14 @@ function App() {
   const [sessionId, setSessionId] = useState<string>('')
   const [players, setPlayers] = useState<string[]>([])
   const [isConnected, setIsConnected] = useState(false)
+  const [currentPlayerId, setCurrentPlayerId] = useState<string>('')
   const [availableSessions, setAvailableSessions] = useState<SessionInfo[]>([])
   const [isHost, setIsHost] = useState(false)
-  const [boardState, setBoardState] = useState<BoardState>({ cells: [] })
+  const [boardState, setBoardState] = useState<BoardState>({
+    cells: [],
+    currentTurnPlayerId: null,
+    placementsRemaining: 0
+  })
 
   const syncAvailableSessions = (sessions: SessionInfo[]) => {
     setAvailableSessions(sessions.filter((session) => session.canJoin))
@@ -27,7 +32,11 @@ function App() {
     setSessionId('')
     setPlayers([])
     setIsHost(false)
-    setBoardState({ cells: [] })
+    setBoardState({
+      cells: [],
+      currentTurnPlayerId: null,
+      placementsRemaining: 0
+    })
     setScreenState('lobby')
     fetchAvailableSessions()
   }
@@ -55,6 +64,7 @@ function App() {
     socket.on('connect', () => {
       console.log('Connected to server')
       setIsConnected(true)
+      setCurrentPlayerId(socket.id ?? '')
       fetchAvailableSessions()
     })
 
@@ -65,6 +75,7 @@ function App() {
     socket.on('disconnect', () => {
       console.log('Disconnected from server')
       setIsConnected(false)
+      setCurrentPlayerId('')
       resetToLobby()
       setAvailableSessions([])
     })
@@ -137,7 +148,11 @@ function App() {
       const data = await response.json()
       setSessionId(data.sessionId)
       setIsHost(true)
-      setBoardState({ cells: [] })
+      setBoardState({
+        cells: [],
+        currentTurnPlayerId: null,
+        placementsRemaining: 0
+      })
       setScreenState('waiting')
       socketRef.current?.emit('join-session', data.sessionId)
     } catch (error) {
@@ -148,7 +163,11 @@ function App() {
   const joinGame = (sessionIdToJoin: string) => {
     setSessionId(sessionIdToJoin)
     setIsHost(false)
-    setBoardState({ cells: [] })
+    setBoardState({
+      cells: [],
+      currentTurnPlayerId: null,
+      placementsRemaining: 0
+    })
     setScreenState('waiting')
     socketRef.current?.emit('join-session', sessionIdToJoin)
   }
@@ -166,6 +185,7 @@ function App() {
         sessionId={sessionId}
         players={players}
         isHost={isHost}
+        currentPlayerId={currentPlayerId}
         boardState={boardState}
         onPlaceCell={(x, y) => socketRef.current?.emit('place-cell', { sessionId, x, y })}
         onLeave={leaveGame}
