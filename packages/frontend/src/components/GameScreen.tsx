@@ -41,7 +41,6 @@ interface RenderableCell extends HexCell {
 }
 
 interface HudState {
-  centerCell: HexCell
   hoveredCell: HexCell | null
   scale: number
 }
@@ -152,7 +151,6 @@ function GameScreen({
     cellMap: Map<string, string>
   } | null>(null)
   const [hudState, setHudState] = useState<HudState>({
-    centerCell: { x: 0, y: 0 },
     hoveredCell: null,
     scale: DEFAULT_SCALE
   })
@@ -199,20 +197,17 @@ function GameScreen({
   }
 
   const updateHudState = () => {
-    const nextCenterCell = pixelToAxial(-viewRef.current.offsetX / viewRef.current.scale, -viewRef.current.offsetY / viewRef.current.scale)
     const nextHoveredCell = hoveredCellRef.current
 
     setHudState((current) => {
       if (
         current.scale === viewRef.current.scale &&
-        sameCell(current.centerCell, nextCenterCell) &&
         sameCell(current.hoveredCell, nextHoveredCell)
       ) {
         return current
       }
 
       return {
-        centerCell: nextCenterCell,
         hoveredCell: nextHoveredCell,
         scale: viewRef.current.scale
       }
@@ -451,13 +446,39 @@ function GameScreen({
       <div className="pointer-events-none absolute inset-0 p-4 sm:p-6">
         <div className="flex h-full flex-col justify-between gap-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="pointer-events-auto max-w-xl rounded-[2rem] border border-white/10 bg-slate-900/80 p-5 shadow-xl backdrop-blur">
+            <div className="pointer-events-auto w-full max-w-sm rounded-[1.5rem] bg-slate-950/28 px-4 py-4 shadow-[0_12px_45px_rgba(15,23,42,0.22)] backdrop-blur-md">
+              <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tik-Tak-Toe</h1>
               <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
-              <h1 className="mt-2 text-3xl font-bold">Infinite Hexagonal Board</h1>
-              <p className="mt-2 text-slate-300">Session: <strong>{sessionId}</strong></p>
-              <p className="text-slate-300">Players: {players.length}/2</p>
-              <p className="text-slate-300">Role: {isHost ? 'Host' : 'Guest'}</p>
-              <p className="text-slate-300">Placed cells: {boardState.cells.length}</p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="border-l border-white/18 pl-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Cells</div>
+                  <div className="mt-1 text-white">{renderableCells.length} active</div>
+                  <div className="text-slate-300">{boardState.cells.length} occupied</div>
+                </div>
+
+                <div className="border-l border-white/18 pl-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Your Color</div>
+                  <div className="mt-1 flex items-center gap-2.5 text-white">
+                    <span
+                      className="h-3.5 w-3.5 rounded-full border border-white/20"
+                      style={{ backgroundColor: getPlayerColor(isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest') }}
+                    />
+                    <span>{getPlayerColor(isHost ? players[0] ?? 'host' : players[1] ?? players[0] ?? 'guest')}</span>
+                  </div>
+                </div>
+
+                <div className="border-l border-white/18 pl-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Hovered Cell</div>
+                  <div className="mt-1 text-white">
+                    {hudState.hoveredCell ? `(${hudState.hoveredCell.x}, ${hudState.hoveredCell.y})` : 'Move over the board'}
+                  </div>
+                </div>
+
+                <div className="border-l border-white/18 pl-3">
+                  <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Zoom Level</div>
+                  <div className="mt-1 text-white">{Math.round((hudState.scale / DEFAULT_SCALE) * 100)}%</div>
+                </div>
+              </div>
             </div>
 
             <div className="pointer-events-auto flex flex-wrap gap-2 self-start">
@@ -477,50 +498,6 @@ function GameScreen({
                 Leave Game
               </button>
             </div>
-          </div>
-
-          <div className="flex justify-end">
-            <aside className="pointer-events-auto w-full max-w-xs rounded-[2rem] border border-white/10 bg-slate-900/80 p-5 shadow-xl backdrop-blur">
-              <h2 className="text-xl font-semibold">Board Guide</h2>
-              <div className="mt-4 space-y-4 text-sm text-slate-300">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Pointer</div>
-                  <div className="mt-2 text-base text-white">
-                    {hudState.hoveredCell ? `(${hudState.hoveredCell.x}, ${hudState.hoveredCell.y})` : 'Move over the board'}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Zoom</div>
-                  <div className="mt-2 text-base text-white">{hudState.scale.toFixed(0)} px / hex</div>
-                  <div className="mt-1 text-xs text-slate-400">Center: ({hudState.centerCell.x}, {hudState.centerCell.y})</div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Active Cells</div>
-                  <div className="mt-2 text-base text-white">{renderableCells.length}</div>
-                  <div className="mt-1 text-xs text-slate-400">Occupied hexes and empty hexes within {HEX_RADIUS} steps</div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Players</div>
-                  <div className="mt-3 space-y-2">
-                    {players.map((playerId) => (
-                      <div
-                        key={playerId}
-                        className="flex items-center gap-3"
-                      >
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: getPlayerColor(playerId) }}
-                        />
-                        <span className="truncate text-white">{playerId}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </aside>
           </div>
         </div>
       </div>
