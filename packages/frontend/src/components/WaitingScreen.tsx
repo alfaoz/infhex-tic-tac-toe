@@ -10,23 +10,23 @@ function WaitingScreen({ sessionId, playerCount, onInviteFriend, onCancel }: Rea
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_30%),linear-gradient(135deg,_#111827,_#0f172a_45%,_#1e293b)] text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-between px-6 py-10">
         <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
-          <section className="relative flex min-h-[34rem] overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur md:p-10">
+          <section className="relative min-h-[34rem] hidden sm:flex overflow-hidden rounded-[2rem] border border-white/10 bg-white/6 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur md:p-10">
             <div className="absolute -right-10 -top-12 h-36 w-36 rounded-full bg-amber-300/20 blur-3xl" />
             <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-sky-400/20 blur-3xl" />
 
             <div className="relative flex flex-1 flex-col justify-center">
-              <div className="self-start inline-flex rounded-full border border-amber-300/35 bg-amber-300/10 px-4 py-1 text-xs uppercase tracking-[0.35em] text-amber-100">
+              <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-1 text-xs uppercase tracking-[0.35em] text-amber-100">
                 Matchmaking
               </div>
-              <h1 className="mt-6 text-5xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">
+              <h1 className="mt-6 text-4xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">
                 Infinity
                 <br />
                 Hexagonial
                 <br />
                 Tik-Tak-Toe
               </h1>
-              <p className="mt-6 max-w-lg text-base leading-7 text-slate-200 sm:text-lg">
-                Your session is live and visible in the lobby list. Share the code with a second player and stay ready for the board to open.
+              <p className="mt-6 max-w-xl text-base leading-7 text-slate-200 sm:text-lg">
+                Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align five in a row.
               </p>
             </div>
           </section>

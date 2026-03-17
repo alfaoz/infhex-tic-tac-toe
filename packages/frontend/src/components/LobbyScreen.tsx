@@ -25,7 +25,7 @@ function LobbyScreen({
               <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-1 text-xs uppercase tracking-[0.35em] text-amber-100">
                 Two Players
               </div>
-              <h1 className="mt-6 text-5xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">
+              <h1 className="mt-6 text-4xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">
                 Infinity
                 <br />
                 Hexagonial
@@ -33,7 +33,7 @@ function LobbyScreen({
                 Tik-Tak-Toe
               </h1>
               <p className="mt-6 max-w-xl text-base leading-7 text-slate-200 sm:text-lg">
-                Step into the lobby, open a fresh session, or jump into an available match on the shared infinite board.
+                Place your hexes on an infinite board, outmaneuver your opponent, and be the first to align five in a row.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
