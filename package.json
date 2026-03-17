@@ -1,0 +1,21 @@
+{
+  "name": "ih3t",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "pnpm --filter @ih3t/backend build && pnpm --filter @ih3t/frontend build",
+    "build:shared": "pnpm --filter @ih3t/shared build",
+    "build:backend": "pnpm --filter @ih3t/backend build",
+    "build:frontend": "pnpm --filter @ih3t/frontend build",
+    "dev": "pnpm --filter @ih3t/frontend dev",
+    "server": "pnpm --filter @ih3t/backend server",
+    "server:dev": "pnpm --filter @ih3t/backend dev",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean",
+    "type-check": "pnpm --filter @ih3t/shared build && pnpm --filter @ih3t/backend run type-check && pnpm --filter @ih3t/frontend run type-check"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

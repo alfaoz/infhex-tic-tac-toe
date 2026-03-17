@@ -1,0 +1,24 @@
+{
+    "name": "@ih3t/backend",
+    "version": "0.0.0",
+    "private": true,
+    "main": "dist/server.js",
+    "scripts": {
+        "build": "tsc --build",
+        "start": "node dist/server.js",
+        "dev": "tsx watch src/server.ts",
+        "server": "tsx src/server.ts",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "express": "^5.2.1",
+        "socket.io": "^4.8.3",
+        "@ih3t/shared": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.6",
+        "@types/node": "^25.5.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3"
+    }
+}
