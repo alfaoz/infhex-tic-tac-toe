@@ -63,6 +63,48 @@ function getBoardCells(session: GameSession): BoardCell[] {
     });
 }
 
+function countConnectedTiles(
+    occupiedCells: Set<string>,
+    startX: number,
+    startY: number,
+    directionX: number,
+    directionY: number,
+): number {
+    let count = 0;
+    let currentX = startX + directionX;
+    let currentY = startY + directionY;
+
+    while (occupiedCells.has(getCellKey(currentX, currentY))) {
+        count += 1;
+        currentX += directionX;
+        currentY += directionY;
+    }
+
+    return count;
+}
+
+function hasFiveInARow(session: GameSession, playerId: string, x: number, y: number): boolean {
+    const occupiedCells = new Set(
+        session.gameState.cells
+            .filter((cell) => cell.occupiedBy === playerId)
+            .map((cell) => getCellKey(cell.x, cell.y))
+    );
+    const directions: Array<[number, number]> = [
+        [1, 0],
+        [0, 1],
+        [1, -1]
+    ];
+
+    return directions.some(([directionX, directionY]) => {
+        const connectedCount =
+            1 +
+            countConnectedTiles(occupiedCells, x, y, directionX, directionY) +
+            countConnectedTiles(occupiedCells, x, y, -directionX, -directionY);
+
+        return connectedCount >= 5;
+    });
+}
+
 function emitGameState(sessionId: string): void {
     const session = gameSessions.get(sessionId);
     if (!session) {
@@ -335,6 +377,12 @@ io.on('connection', (socket) => {
             y: data.y,
             occupiedBy: socket.id
         });
+
+        if (hasFiveInARow(session, socket.id, data.x, data.y)) {
+            emitGameState(data.sessionId);
+            finishSession(data.sessionId, 'five-in-a-row', socket.id);
+            return;
+        }
 
         session.gameState.placementsRemaining -= 1;
         if (session.gameState.placementsRemaining === 0) {

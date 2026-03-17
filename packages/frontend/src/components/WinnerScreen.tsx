@@ -8,7 +8,9 @@ interface WinnerScreenProps {
 function WinnerScreen({ reason, onReturnToLobby }: Readonly<WinnerScreenProps>) {
   const message = reason === 'timeout'
     ? 'The other player failed to place a cell before the timer ran out.'
-    : 'The other player disconnected.'
+    : reason === 'five-in-a-row'
+      ? 'You completed a five-tile row.'
+      : 'The other player disconnected.'
 
   return (
     <div className="w-full h-full bg-slate-950/40 flex flex-col items-center justify-center p-6 text-white font-sans text-center backdrop-blur-[2px]">

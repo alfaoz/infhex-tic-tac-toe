@@ -1,6 +1,6 @@
 export type SessionState = 'lobby' | 'ingame' | 'finished';
 export type CellOccupant = string & { _type?: "CellOccupant" };
-export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated';
+export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated' | 'five-in-a-row';
 
 export interface BoardCell {
     x: number;
