@@ -1,18 +1,51 @@
 import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { ServerToClientEvents, ClientToServerEvents, SessionInfo } from '@ih3t/shared'
+import { BoardState, ServerToClientEvents, ClientToServerEvents, SessionInfo, SessionState } from '@ih3t/shared'
+import GameScreen from './components/GameScreen'
+import LobbyScreen from './components/LobbyScreen'
+import WaitingScreen from './components/WaitingScreen'
+import WinnerScreen from './components/WinnerScreen'
 
-type GameState = 'lobby' | 'waiting' | 'playing'
+type ScreenState = 'lobby' | 'waiting' | 'playing' | 'winner'
 
 function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
-  const [gameState, setGameState] = useState<GameState>('lobby')
+  const sessionIdRef = useRef<string>('')
+  const [screenState, setScreenState] = useState<ScreenState>('lobby')
   const [sessionId, setSessionId] = useState<string>('')
   const [players, setPlayers] = useState<string[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [availableSessions, setAvailableSessions] = useState<SessionInfo[]>([])
   const [isHost, setIsHost] = useState(false)
+  const [boardState, setBoardState] = useState<BoardState>({ cells: [] })
+
+  const syncAvailableSessions = (sessions: SessionInfo[]) => {
+    setAvailableSessions(sessions.filter((session) => session.canJoin))
+  }
+
+  const resetToLobby = () => {
+    setSessionId('')
+    setPlayers([])
+    setIsHost(false)
+    setBoardState({ cells: [] })
+    setScreenState('lobby')
+    fetchAvailableSessions()
+  }
+
+  const updateScreenForSessionState = (state: SessionState) => {
+    if (state === 'ingame') {
+      setScreenState('playing')
+      return
+    }
+
+    if (state === 'lobby') {
+      setScreenState('waiting')
+    }
+  }
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
 
   useEffect(() => {
     // Connect to the server
@@ -25,26 +58,50 @@ function App() {
       fetchAvailableSessions()
     })
 
+    socket.on('sessions-updated', (sessions: SessionInfo[]) => {
+      syncAvailableSessions(sessions)
+    })
+
     socket.on('disconnect', () => {
       console.log('Disconnected from server')
       setIsConnected(false)
-      setGameState('lobby')
+      resetToLobby()
+      setAvailableSessions([])
     })
 
-    socket.on('player-joined', (data: { players: string[] }) => {
+    socket.on('player-joined', (data: { players: string[]; state: SessionState }) => {
       console.log('Player joined:', data)
       setPlayers(data.players)
-      if (data.players.length === 2) {
-        setGameState('playing')
-      }
+      updateScreenForSessionState(data.state)
     })
 
-    socket.on('player-left', (data: { players: string[] }) => {
+    socket.on('player-left', (data: { players: string[]; state: SessionState }) => {
       console.log('Player left:', data)
       setPlayers(data.players)
-      if (data.players.length < 2) {
-        setGameState('waiting')
+      updateScreenForSessionState(data.state)
+    })
+
+    socket.on('session-finished', (data: { sessionId: string; winnerId: string }) => {
+      console.log('Session finished:', data)
+
+      if (data.sessionId !== sessionIdRef.current) {
+        return
       }
+
+      if (data.winnerId === socket.id) {
+        setScreenState('winner')
+        return
+      }
+
+      resetToLobby()
+    })
+
+    socket.on('game-state', (data: { sessionId: string; gameState: BoardState }) => {
+      if (data.sessionId !== sessionIdRef.current) {
+        return
+      }
+
+      setBoardState(data.gameState)
     })
 
     socket.on('game-action', (data: { playerId: string; action: any }) => {
@@ -65,54 +122,11 @@ function App() {
     try {
       const response = await fetch('http://localhost:3001/api/sessions')
       const sessions: SessionInfo[] = await response.json()
-      setAvailableSessions(sessions.filter(session => session.canJoin))
+      syncAvailableSessions(sessions)
     } catch (error) {
       console.error('Failed to fetch sessions:', error)
     }
   }
-
-  useEffect(() => {
-    if (gameState !== 'playing') return
-
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    // Set canvas size
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
-
-    // Draw game background
-    ctx.fillStyle = '#2c3e50'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-    // Draw game info
-    ctx.fillStyle = 'white'
-    ctx.font = '24px Arial'
-    ctx.fillText(`Game Session: ${sessionId}`, 20, 40)
-    ctx.fillText(`Players: ${players.length}/2`, 20, 70)
-    ctx.fillText(`You are: ${isHost ? 'Host' : 'Guest'}`, 20, 100)
-
-    // Handle resize
-    const handleResize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-      ctx.fillStyle = '#2c3e50'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      ctx.fillStyle = 'white'
-      ctx.font = '24px Arial'
-      ctx.fillText(`Game Session: ${sessionId}`, 20, 40)
-      ctx.fillText(`Players: ${players.length}/2`, 20, 70)
-      ctx.fillText(`You are: ${isHost ? 'Host' : 'Guest'}`, 20, 100)
-    }
-
-    window.addEventListener('resize', handleResize)
-
-    return () => window.removeEventListener('resize', handleResize)
-  }, [gameState, sessionId, players, isHost])
 
   const hostGame = async () => {
     try {
@@ -123,7 +137,8 @@ function App() {
       const data = await response.json()
       setSessionId(data.sessionId)
       setIsHost(true)
-      setGameState('waiting')
+      setBoardState({ cells: [] })
+      setScreenState('waiting')
       socketRef.current?.emit('join-session', data.sessionId)
     } catch (error) {
       console.error('Failed to create session:', error)
@@ -133,109 +148,55 @@ function App() {
   const joinGame = (sessionIdToJoin: string) => {
     setSessionId(sessionIdToJoin)
     setIsHost(false)
-    setGameState('waiting')
+    setBoardState({ cells: [] })
+    setScreenState('waiting')
     socketRef.current?.emit('join-session', sessionIdToJoin)
   }
 
   const leaveGame = () => {
     if (sessionId && socketRef.current) {
       socketRef.current.emit('leave-session', sessionId)
-      setSessionId('')
-      setPlayers([])
-      setGameState('lobby')
-      setIsHost(false)
-      fetchAvailableSessions()
+      resetToLobby()
     }
   }
 
-  if (gameState === 'playing') {
+  if (screenState === 'playing') {
     return (
-      <div className="relative w-full h-full">
-        <canvas
-          ref={canvasRef}
-          className="block w-full h-full"
+      <GameScreen
+        sessionId={sessionId}
+        players={players}
+        isHost={isHost}
+        boardState={boardState}
+        onPlaceCell={(x, y) => socketRef.current?.emit('place-cell', { sessionId, x, y })}
+        onLeave={leaveGame}
+      />
+    )
+  }
+
+  if (screenState === 'winner') {
+    return <WinnerScreen onReturnToLobby={resetToLobby} />
+  }
+
+  if (screenState === 'waiting') {
+    return (
+      <div className="w-screen h-screen bg-slate-600 flex flex-col items-center justify-center text-white font-sans">
+        <h1 className="mb-10 text-5xl text-center">Infinity Hexagonial<br />Tik-Tak-Toe</h1>
+        <WaitingScreen
+          sessionId={sessionId}
+          playerCount={players.length}
+          onCancel={leaveGame}
         />
-        <button
-          onClick={leaveGame}
-          className="absolute top-2 right-2 px-5 py-2 bg-red-500 text-white border-none rounded cursor-pointer hover:bg-red-600"
-        >
-          Leave Game
-        </button>
       </div>
     )
   }
 
   return (
-    <div className="w-screen h-screen bg-slate-600 flex flex-col items-center justify-center text-white font-sans">
-      <h1 className="mb-10 text-5xl text-center">Infinity Hexagonial<br />Tik-Tak-Toe</h1>
-
-      {gameState === 'waiting' && (
-        <div className="text-center">
-          <h2>Waiting for another player...</h2>
-          <p>Session ID: <strong>{sessionId}</strong></p>
-          <p>Players: {players.length}/2</p>
-          <button
-            onClick={leaveGame}
-            className="mt-5 px-5 py-2 bg-red-500 text-white border-none rounded cursor-pointer hover:bg-red-600"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {gameState === 'lobby' && (
-        <div className="text-center">
-          <div className="mb-7">
-            <button
-              onClick={hostGame}
-              disabled={!isConnected}
-              className={`px-7 py-3.75 text-lg mr-5 border-none rounded cursor-pointer text-white ${isConnected
-                ? 'bg-green-500 hover:bg-green-600 cursor-pointer'
-                : 'bg-gray-500 cursor-not-allowed'
-                }`}
-            >
-              Host Game
-            </button>
-          </div>
-
-          <div>
-            <h3 className="mb-5">Available Games</h3>
-            {availableSessions.length === 0 ? (
-              <p>No games available. Host one above!</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {availableSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="bg-slate-700 p-3 rounded flex justify-between items-center min-w-75"
-                  >
-                    <div>
-                      <div>Game: <strong>{session.id}</strong></div>
-                      <div>Players: {session.playerCount}/2</div>
-                    </div>
-                    <button
-                      onClick={() => joinGame(session.id)}
-                      disabled={!isConnected}
-                      className={`px-4 py-2 border-none rounded text-white ${isConnected
-                        ? 'bg-blue-500 hover:bg-blue-600 cursor-pointer'
-                        : 'bg-gray-500 cursor-not-allowed'
-                        }`}
-                    >
-                      Join
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className={`mt-10 p-5 rounded ${isConnected ? 'bg-green-500' : 'bg-red-500'
-            }`}>
-            Connection Status: {isConnected ? 'Connected' : 'Disconnected'}
-          </div>
-        </div>
-      )}
-    </div>
+    <LobbyScreen
+      isConnected={isConnected}
+      availableSessions={availableSessions}
+      onHostGame={hostGame}
+      onJoinGame={joinGame}
+    />
   )
 }
 

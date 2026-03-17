@@ -1,9 +1,23 @@
+export type SessionState = 'lobby' | 'ingame' | 'finished';
+export type CellOccupant = string;
+
+export interface BoardCell {
+    x: number;
+    y: number;
+    occupiedBy: CellOccupant;
+}
+
+export interface BoardState {
+    cells: BoardCell[];
+}
+
 // Game Session Types
 export interface GameSession {
     id: string;
     players: string[];
     maxPlayers: 2; // Fixed to 2 players
-    gameState: any;
+    state: SessionState;
+    gameState: BoardState;
 }
 
 export interface CreateSessionRequest {
@@ -18,13 +32,17 @@ export interface SessionInfo {
     id: string;
     playerCount: number;
     maxPlayers: 2; // Always 2
+    state: SessionState;
     canJoin: boolean; // Whether the session can accept new players
 }
 
 // Socket Event Types
 export interface ServerToClientEvents {
-    'player-joined': (data: { playerId: string; players: string[] }) => void;
-    'player-left': (data: { playerId: string; players: string[] }) => void;
+    'sessions-updated': (sessions: SessionInfo[]) => void;
+    'player-joined': (data: { playerId: string; players: string[]; state: SessionState }) => void;
+    'player-left': (data: { playerId: string; players: string[]; state: SessionState }) => void;
+    'session-finished': (data: { sessionId: string; winnerId: string }) => void;
+    'game-state': (data: { sessionId: string; gameState: BoardState }) => void;
     'game-action': (data: { playerId: string; action: GameAction }) => void;
     error: (error: string) => void;
 }
@@ -32,6 +50,7 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
     'join-session': (sessionId: string) => void;
     'leave-session': (sessionId: string) => void;
+    'place-cell': (data: { sessionId: string; x: number; y: number }) => void;
     'game-action': (data: { sessionId: string; action: GameAction }) => void;
 }
 
