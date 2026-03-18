@@ -1,7 +1,7 @@
 export const DUMMY = "Hello?";
 export type SessionState = 'lobby' | 'ingame' | 'finished';
 export type CellOccupant = string & { _type?: "CellOccupant" };
-export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated' | 'five-in-a-row';
+export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated' | 'six-in-a-row';
 
 export interface BoardCell {
     x: number;

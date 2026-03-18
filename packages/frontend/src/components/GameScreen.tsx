@@ -837,7 +837,7 @@ function GameScreen({
               <div className="text-sm uppercase tracking-[0.25em] text-sky-300">Live Match</div>
               <h1 className="mt-1 text-2xl font-bold">Infinite Hex Tic-Tac-Toe</h1>
               <div className="mt-2 text-sm text-slate-300">
-                Connect 5 hexagons in a row.<br />
+                Connect 6 hexagons in a row.<br />
                 Tap to place, drag to pan, pinch to zoom.
               </div>
               <div className="mt-4 text-sm grid grid-cols-2 md:grid-cols-1 gap-4">

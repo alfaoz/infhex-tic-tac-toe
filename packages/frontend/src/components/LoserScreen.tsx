@@ -8,8 +8,8 @@ interface LoserScreenProps {
 function LoserScreen({ reason, onReturnToLobby }: LoserScreenProps) {
   const message = reason === 'timeout'
     ? 'You failed to place a cell before the timer ran out.'
-    : reason === 'five-in-a-row'
-      ? 'The other player completed a five-tile row.'
+    : reason === 'six-in-a-row'
+      ? 'The other player completed a six-tile row.'
       : 'You left the match before it finished.'
 
   return (

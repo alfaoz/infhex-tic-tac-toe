@@ -8,8 +8,8 @@ interface WinnerScreenProps {
 function WinnerScreen({ reason, onReturnToLobby }: Readonly<WinnerScreenProps>) {
   const message = reason === 'timeout'
     ? 'The other player failed to place a cell before the timer ran out.'
-    : reason === 'five-in-a-row'
-      ? 'You completed a five-tile row.'
+    : reason === 'six-in-a-row'
+      ? 'You completed a six-tile row.'
       : 'The other player disconnected.'
 
   return (

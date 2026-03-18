@@ -163,7 +163,7 @@ function countConnectedTiles(
     return count;
 }
 
-function hasFiveInARow(session: GameSession, playerId: string, x: number, y: number): boolean {
+function hasSixInARow(session: GameSession, playerId: string, x: number, y: number): boolean {
     const occupiedCells = new Set(
         session.gameState.cells
             .filter((cell) => cell.occupiedBy === playerId)
@@ -181,7 +181,7 @@ function hasFiveInARow(session: GameSession, playerId: string, x: number, y: num
             countConnectedTiles(occupiedCells, x, y, directionX, directionY) +
             countConnectedTiles(occupiedCells, x, y, -directionX, -directionY);
 
-        return connectedCount >= 5;
+        return connectedCount >= 6;
     });
 }
 
@@ -516,9 +516,9 @@ io.on('connection', (socket) => {
             occupiedBy: socket.id
         });
 
-        if (hasFiveInARow(session, socket.id, data.x, data.y)) {
+        if (hasSixInARow(session, socket.id, data.x, data.y)) {
             emitGameState(data.sessionId);
-            finishSession(data.sessionId, 'five-in-a-row', socket.id);
+            finishSession(data.sessionId, 'six-in-a-row', socket.id);
             return;
         }
 
