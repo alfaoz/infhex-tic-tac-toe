@@ -40,8 +40,9 @@ function GameScreen({
   const [highlightedCellKeys, setHighlightedCellKeys] = useState<string[]>([])
   const previousBoardStateRef = useRef<BoardState | null>(null)
   const previousCellCountRef = useRef(boardState.cells.length)
-  const ongoingOpponentTurnKeysRef = useRef<string[]>([])
-  const lastOpponentTurnKeysRef = useRef<string[]>([])
+  const ongoingHighlightedTurnKeysRef = useRef<string[]>([])
+  const ongoingHighlightedTurnPlayerIdRef = useRef<string | null>(null)
+  const lastHighlightedTurnKeysRef = useRef<string[]>([])
 
   const effectiveTimeControl: GameTimeControl = timeControl ?? { mode: 'unlimited' }
   const isSpectator = participantRole === 'spectator'
@@ -52,16 +53,18 @@ function GameScreen({
   useEffect(() => {
     previousBoardStateRef.current = null
     previousCellCountRef.current = boardState.cells.length
-    ongoingOpponentTurnKeysRef.current = []
-    lastOpponentTurnKeysRef.current = []
+    ongoingHighlightedTurnKeysRef.current = []
+    ongoingHighlightedTurnPlayerIdRef.current = null
+    lastHighlightedTurnKeysRef.current = []
     setHighlightedCellKeys([])
   }, [currentPlayerId, participantRole])
 
   useEffect(() => {
-    if (!interactionEnabled || isSpectator || !currentPlayerId) {
+    if (!interactionEnabled || (!isSpectator && !currentPlayerId)) {
       previousBoardStateRef.current = boardState
-      ongoingOpponentTurnKeysRef.current = []
-      lastOpponentTurnKeysRef.current = []
+      ongoingHighlightedTurnKeysRef.current = []
+      ongoingHighlightedTurnPlayerIdRef.current = null
+      lastHighlightedTurnKeysRef.current = []
       setHighlightedCellKeys([])
       return
     }
@@ -69,47 +72,62 @@ function GameScreen({
     const previousBoardState = previousBoardStateRef.current
     if (!previousBoardState || boardState.cells.length < previousBoardState.cells.length) {
       previousBoardStateRef.current = boardState
-      ongoingOpponentTurnKeysRef.current = []
-      lastOpponentTurnKeysRef.current = []
+      ongoingHighlightedTurnKeysRef.current = []
+      ongoingHighlightedTurnPlayerIdRef.current = null
+      lastHighlightedTurnKeysRef.current = []
       setHighlightedCellKeys([])
       return
     }
 
-    const previousCellKeys = new Set(previousBoardState.cells.map(cell => getCellKey(cell.x, cell.y)))
-    const addedOpponentCellKeys = boardState.cells.reduce<string[]>((addedKeys, cell) => {
-      const cellKey = getCellKey(cell.x, cell.y)
-      if (!previousCellKeys.has(cellKey) && cell.occupiedBy !== currentPlayerId) {
-        addedKeys.push(cellKey)
+    const isTrackedTurnPlayer = (playerId: string | null): playerId is string => {
+      if (!playerId) {
+        return false
       }
-      return addedKeys
-    }, [])
-    const wasOpponentTurn = Boolean(previousBoardState.currentTurnPlayerId) && previousBoardState.currentTurnPlayerId !== currentPlayerId
-    const isOpponentTurn = Boolean(boardState.currentTurnPlayerId) && boardState.currentTurnPlayerId !== currentPlayerId
 
-    if (addedOpponentCellKeys.length > 0) {
-      if (isOpponentTurn) {
-        ongoingOpponentTurnKeysRef.current = mergeCellKeys(
-          wasOpponentTurn ? ongoingOpponentTurnKeysRef.current : [],
-          addedOpponentCellKeys
-        )
-        setHighlightedCellKeys(ongoingOpponentTurnKeysRef.current)
-      } else {
-        const completedOpponentTurnKeys = mergeCellKeys(
-          wasOpponentTurn ? ongoingOpponentTurnKeysRef.current : [],
-          addedOpponentCellKeys
-        )
-        ongoingOpponentTurnKeysRef.current = []
-        lastOpponentTurnKeysRef.current = completedOpponentTurnKeys
-        setHighlightedCellKeys(completedOpponentTurnKeys)
+      return isSpectator || playerId !== currentPlayerId
+    }
+
+    const previousCellKeys = new Set(previousBoardState.cells.map(cell => getCellKey(cell.x, cell.y)))
+    const addedHighlightedTurnCells = boardState.cells.reduce<BoardState['cells']>((addedCells, cell) => {
+      const cellKey = getCellKey(cell.x, cell.y)
+      if (!previousCellKeys.has(cellKey) && (isSpectator || cell.occupiedBy !== currentPlayerId)) {
+        addedCells.push(cell)
       }
-    } else if (!isOpponentTurn && wasOpponentTurn && ongoingOpponentTurnKeysRef.current.length > 0) {
-      lastOpponentTurnKeysRef.current = ongoingOpponentTurnKeysRef.current
-      ongoingOpponentTurnKeysRef.current = []
-      setHighlightedCellKeys(lastOpponentTurnKeysRef.current)
-    } else if (isOpponentTurn && ongoingOpponentTurnKeysRef.current.length > 0) {
-      setHighlightedCellKeys(ongoingOpponentTurnKeysRef.current)
+      return addedCells
+    }, [])
+
+    if (addedHighlightedTurnCells.length > 0) {
+      const addedHighlightedTurnPlayerId = addedHighlightedTurnCells[0]?.occupiedBy ?? null
+      if (ongoingHighlightedTurnPlayerIdRef.current !== addedHighlightedTurnPlayerId) {
+        ongoingHighlightedTurnPlayerIdRef.current = addedHighlightedTurnPlayerId
+        ongoingHighlightedTurnKeysRef.current = []
+      }
+
+      ongoingHighlightedTurnKeysRef.current = mergeCellKeys(
+        ongoingHighlightedTurnKeysRef.current,
+        addedHighlightedTurnCells.map(cell => getCellKey(cell.x, cell.y))
+      )
+    }
+
+    const currentHighlightedTurnPlayerId = isTrackedTurnPlayer(boardState.currentTurnPlayerId)
+      ? boardState.currentTurnPlayerId
+      : null
+
+    if (
+      ongoingHighlightedTurnPlayerIdRef.current !== null &&
+      ongoingHighlightedTurnPlayerIdRef.current !== currentHighlightedTurnPlayerId &&
+      ongoingHighlightedTurnKeysRef.current.length > 0
+    ) {
+      lastHighlightedTurnKeysRef.current = ongoingHighlightedTurnKeysRef.current
+      ongoingHighlightedTurnKeysRef.current = []
+    }
+
+    ongoingHighlightedTurnPlayerIdRef.current = currentHighlightedTurnPlayerId
+
+    if (ongoingHighlightedTurnKeysRef.current.length > 0) {
+      setHighlightedCellKeys(ongoingHighlightedTurnKeysRef.current)
     } else {
-      setHighlightedCellKeys(lastOpponentTurnKeysRef.current)
+      setHighlightedCellKeys(lastHighlightedTurnKeysRef.current)
     }
 
     previousBoardStateRef.current = boardState
