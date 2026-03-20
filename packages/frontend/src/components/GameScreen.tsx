@@ -19,6 +19,7 @@ interface GameScreenProps {
   shutdown: ShutdownState | null
   onPlaceCell: (x: number, y: number) => void
   onLeave: () => void
+  leaveLabel?: string
   overlay?: ReactNode
   interactionEnabled?: boolean
 }
@@ -38,6 +39,7 @@ function GameScreen({
   shutdown,
   onPlaceCell,
   onLeave,
+  leaveLabel,
   overlay,
   interactionEnabled = true
 }: Readonly<GameScreenProps>) {
@@ -205,6 +207,7 @@ function GameScreen({
 
               shutdown={shutdown}
 
+              leaveLabel={leaveLabel}
               onLeave={onLeave}
               onResetView={resetView}
             />

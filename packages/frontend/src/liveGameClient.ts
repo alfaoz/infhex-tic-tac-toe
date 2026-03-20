@@ -165,6 +165,17 @@ export function leaveGame() {
   void fetchAvailableSessions()
 }
 
+export function surrenderGame() {
+  const state = useLiveGameStore.getState()
+  const activeSessionId = getActiveSessionId(state.screen)
+  if (!activeSessionId || !socket) {
+    state.resetToLobby()
+    return
+  }
+
+  socket.emit('surrender-session', activeSessionId)
+}
+
 export function returnToLobby() {
   const state = useLiveGameStore.getState()
   const activeSessionId = getActiveSessionId(state.screen)

@@ -183,6 +183,24 @@ export class SocketServerGateway {
                 this.sessionManager.leaveSession(parsedSessionId, participantId, 'leave-session');
             });
 
+            socket.on('surrender-session', (sessionId: string) => {
+                let parsedSessionId: string;
+                try {
+                    parsedSessionId = zSocketSessionId.parse(sessionId);
+                } catch {
+                    socket.emit('error', 'Invalid session id.');
+                    return;
+                }
+
+                try {
+                    this.sessionManager.surrenderSession(parsedSessionId, participantId);
+                    socket.leave(parsedSessionId);
+                } catch (error: unknown) {
+                    logSocketActionFailure(this.logger, 'surrender-session', socket, error, { sessionId });
+                    socket.emit('error', getSocketErrorMessage(error));
+                }
+            });
+
             socket.on('request-rematch', (finishedSessionId: string) => {
                 let parsedSessionId: string;
                 try {

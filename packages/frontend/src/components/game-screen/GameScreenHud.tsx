@@ -17,6 +17,7 @@ interface GameScreenHudProps {
 
   shutdown: ShutdownState | null
 
+  leaveLabel?: string
   onLeave: () => void
   onResetView: () => void
 }
@@ -39,6 +40,7 @@ function GameScreenHud({
 
   shutdown,
 
+  leaveLabel = 'Leave Game',
   onLeave,
   onResetView
 }: Readonly<GameScreenHudProps>) {
@@ -154,7 +156,7 @@ function GameScreenHud({
             onClick={onLeave}
             className="min-w-[9rem] flex-1 rounded-full bg-red-500 px-4 py-2 font-medium shadow-lg hover:bg-red-400 md:flex-none"
           >
-            Leave Game
+            {leaveLabel}
           </button>
           <button
             onClick={onResetView}

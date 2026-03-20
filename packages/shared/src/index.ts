@@ -15,7 +15,7 @@ export type SessionParticipantRole = z.infer<typeof zSessionParticipantRole>;
 export const zCellOccupant = z.string().brand<'CellOccupant'>();
 export type CellOccupant = z.infer<typeof zCellOccupant>;
 
-export const zSessionFinishReason = z.enum(['disconnect', 'timeout', 'terminated', 'six-in-a-row']);
+export const zSessionFinishReason = z.enum(['disconnect', 'surrender', 'timeout', 'terminated', 'six-in-a-row']);
 export type SessionFinishReason = z.infer<typeof zSessionFinishReason>;
 
 export const zLobbyVisibility = z.enum(['public', 'private']);
@@ -231,6 +231,7 @@ export type ServerToClientEvents = z.infer<typeof zServerToClientEvents>;
 export const zClientToServerEvents = z.custom<{
     'join-session': (request: JoinSessionRequest) => void;
     'leave-session': (sessionId: string) => void;
+    'surrender-session': (sessionId: string) => void;
     'place-cell': (data: PlaceCellRequest) => void;
     'request-rematch': (sessionId: string) => void;
     'cancel-rematch': (sessionId: string) => void;

@@ -263,6 +263,20 @@ export class SessionManager {
         }
     }
 
+    surrenderSession(sessionId: string, participantId: string): void {
+        const session = this.requireSession(sessionId);
+        if (session.state !== 'ingame') {
+            throw new SessionError('Game is not currently active');
+        }
+
+        if (!session.players.includes(participantId)) {
+            throw new SessionError('Only active players can surrender');
+        }
+
+        const winningPlayerId = session.players.find((playerId) => playerId !== participantId) ?? null;
+        this.finishSession(session, 'surrender', winningPlayerId);
+    }
+
     handleDisconnect(participantId: string, terminal: boolean): void {
         this.removePendingRematchesForPlayer(participantId);
 

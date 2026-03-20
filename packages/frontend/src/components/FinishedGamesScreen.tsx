@@ -39,6 +39,10 @@ function getResultLabel(game: FinishedGameSummary) {
     return 'Won on time'
   }
 
+  if (game.reason === 'surrender') {
+    return 'Won by surrender'
+  }
+
   if (game.reason === 'disconnect') {
     return 'Won by disconnect'
   }

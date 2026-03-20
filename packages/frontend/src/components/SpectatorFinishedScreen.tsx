@@ -18,6 +18,8 @@ function SpectatorFinishedScreen({
     ? 'One player ran out of time, so the match ended.'
     : reason === 'six-in-a-row'
       ? 'A player connected six hexagons in a row.'
+      : reason === 'surrender'
+        ? 'A player surrendered, so the match ended.'
       : reason === 'terminated'
         ? 'The match was closed when the server shutdown reached its deadline.'
         : 'A player disconnected before the match could finish.'

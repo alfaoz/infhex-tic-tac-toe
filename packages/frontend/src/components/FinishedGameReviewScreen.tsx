@@ -35,6 +35,10 @@ function getFinishReasonLabel(reason: FinishedGameRecord['reason']) {
     return 'Timeout'
   }
 
+  if (reason === 'surrender') {
+    return 'Surrender'
+  }
+
   if (reason === 'disconnect') {
     return 'Disconnect'
   }

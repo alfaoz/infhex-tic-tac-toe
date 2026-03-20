@@ -355,6 +355,8 @@ export class HttpApplication {
                 return 'with a six-in-a-row win';
             case 'disconnect':
                 return 'after a disconnect';
+            case 'surrender':
+                return 'after a surrender';
             case 'timeout':
                 return 'after a timeout';
             case 'terminated':

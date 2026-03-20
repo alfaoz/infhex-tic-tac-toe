@@ -19,6 +19,7 @@ import {
   requestRematch,
   returnToLobby,
   startLiveGameClient,
+  surrenderGame,
   stopLiveGameClient
 } from './liveGameClient'
 import { useLiveGameStore } from './liveGameStore'
@@ -375,7 +376,8 @@ function App() {
         timeControl={liveScreen.lobbyOptions.timeControl}
         shutdown={shutdown}
         onPlaceCell={placeCell}
-        onLeave={leaveGame}
+        onLeave={liveScreen.participantRole === 'player' ? surrenderGame : leaveGame}
+        leaveLabel={liveScreen.participantRole === 'player' ? 'Surrender' : 'Leave Game'}
       />
     )
   } else if (liveScreen.kind === 'finished-player') {
