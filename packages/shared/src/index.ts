@@ -76,6 +76,32 @@ export const zShutdownState = z.object({
 });
 export type ShutdownState = z.infer<typeof zShutdownState>;
 
+export const zAdminScheduleShutdownRequest = z.object({
+    delayMinutes: z.number().int().min(1).max(24 * 60)
+});
+export type AdminScheduleShutdownRequest = z.infer<typeof zAdminScheduleShutdownRequest>;
+
+export const zAdminShutdownControlResponse = z.object({
+    shutdown: zShutdownState.nullable()
+});
+export type AdminShutdownControlResponse = z.infer<typeof zAdminShutdownControlResponse>;
+
+export const zAdminBroadcastMessage = z.object({
+    message: z.string().trim().min(1).max(280),
+    sentAt: zTimestamp
+});
+export type AdminBroadcastMessage = z.infer<typeof zAdminBroadcastMessage>;
+
+export const zAdminBroadcastMessageRequest = z.object({
+    message: z.string().trim().min(1).max(280)
+});
+export type AdminBroadcastMessageRequest = z.infer<typeof zAdminBroadcastMessageRequest>;
+
+export const zAdminBroadcastMessageResponse = z.object({
+    broadcast: zAdminBroadcastMessage
+});
+export type AdminBroadcastMessageResponse = z.infer<typeof zAdminBroadcastMessageResponse>;
+
 export const zBoardCell = z.object({
     x: zCoordinate,
     y: zCoordinate,
@@ -253,6 +279,7 @@ export type PlaceCellRequest = z.infer<typeof zPlaceCellRequest>;
 export const zServerToClientEvents = z.custom<{
     'sessions-updated': (sessions: SessionInfo[]) => void;
     'shutdown-updated': (shutdown: ShutdownState | null) => void;
+    'admin-message': (broadcast: AdminBroadcastMessage) => void;
     'session-joined': (data: SessionJoinedEvent) => void;
     'session-updated': (data: SessionUpdatedEvent) => void;
     'participant-joined': (data: ParticipantUpdatedEvent) => void;

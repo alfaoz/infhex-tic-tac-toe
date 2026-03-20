@@ -6,9 +6,13 @@ import {
     type AdminStatsResponse,
     type AccountResponse,
     type AdminLeaderboard,
+    type AdminBroadcastMessageResponse,
+    type AdminShutdownControlResponse,
     DEFAULT_LOBBY_OPTIONS,
     type CreateSessionResponse,
     type LobbyOptions,
+    zAdminBroadcastMessageRequest,
+    zAdminScheduleShutdownRequest,
     zLobbyVisibility,
     zUpdateAccountProfileRequest,
 } from '@ih3t/shared';
@@ -16,6 +20,7 @@ import { AdminStatsService } from '../../admin/adminStatsService';
 import { AuthRepository } from '../../auth/authRepository';
 import { AuthService } from '../../auth/authService';
 import { getRequestClientInfo } from '../clientInfo';
+import { SocketServerGateway } from '../createSocketServer';
 import { GameHistoryRepository } from '../../persistence/gameHistoryRepository';
 import { SessionError, SessionManager } from '../../session/sessionManager';
 
@@ -63,6 +68,7 @@ export class ApiRouter {
         @inject(AuthService) private readonly authService: AuthService,
         @inject(AuthRepository) private readonly authRepository: AuthRepository,
         @inject(AdminStatsService) private readonly adminStatsService: AdminStatsService,
+        @inject(SocketServerGateway) private readonly socketServerGateway: SocketServerGateway,
         @inject(SessionManager) private readonly sessionManager: SessionManager,
         @inject(GameHistoryRepository) private readonly gameHistoryRepository: GameHistoryRepository
     ) {
@@ -151,6 +157,43 @@ export class ApiRouter {
 
             const query = zAdminStatsQuery.parse(req.query);
             const response: AdminStatsResponse = await this.adminStatsService.getStats(new Date(), query.tzOffsetMinutes);
+            res.json(response);
+        });
+
+        router.post('/admin/shutdown', express.json(), async (req, res) => {
+            const user = await this.requireAdminUser(req, res);
+            if (!user) {
+                return;
+            }
+
+            const request = zAdminScheduleShutdownRequest.parse(req.body ?? {});
+            const shutdown = this.sessionManager.scheduleShutdown(request.delayMinutes * 60 * 1000);
+            const response: AdminShutdownControlResponse = { shutdown };
+            res.json(response);
+        });
+
+        router.delete('/admin/shutdown', async (req, res) => {
+            const user = await this.requireAdminUser(req, res);
+            if (!user) {
+                return;
+            }
+
+            this.sessionManager.cancelShutdown();
+            const response: AdminShutdownControlResponse = {
+                shutdown: this.sessionManager.getShutdownState()
+            };
+            res.json(response);
+        });
+
+        router.post('/admin/broadcast', express.json(), async (req, res) => {
+            const user = await this.requireAdminUser(req, res);
+            if (!user) {
+                return;
+            }
+
+            const request = zAdminBroadcastMessageRequest.parse(req.body ?? {});
+            const broadcast = this.socketServerGateway.broadcastAdminMessage(request.message);
+            const response: AdminBroadcastMessageResponse = { broadcast };
             res.json(response);
         });
 

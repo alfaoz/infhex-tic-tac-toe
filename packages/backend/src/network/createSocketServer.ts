@@ -4,6 +4,7 @@ import { Server, type Socket } from 'socket.io';
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import {
+    type AdminBroadcastMessage,
     type ClientToServerEvents,
     type ServerToClientEvents,
     zJoinSessionRequest,
@@ -256,6 +257,24 @@ export class SocketServerGateway {
 
     public getConnectedClientCount() {
         return this.io?.sockets.sockets.size ?? 0;
+    }
+
+    public broadcastAdminMessage(message: string): AdminBroadcastMessage {
+        const broadcast: AdminBroadcastMessage = {
+            message,
+            sentAt: Date.now()
+        };
+
+        this.io?.emit('admin-message', broadcast);
+
+        this.logger.info({
+            event: 'admin.broadcast',
+            sentAt: new Date(broadcast.sentAt).toISOString(),
+            messageLength: message.length,
+            connectedClients: this.getConnectedClientCount()
+        }, 'Broadcasted admin message');
+
+        return broadcast;
     }
 
     private getParticipation(socketId: string): Participation | undefined {

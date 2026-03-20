@@ -23,6 +23,13 @@ function showErrorToast(message: string) {
   })
 }
 
+function showAdminMessageToast(message: string, sentAt: number) {
+  toast.info(message, {
+    toastId: `admin-message:${sentAt}`,
+    autoClose: 10_000
+  })
+}
+
 function navigateToSession(sessionId: string) {
   const sessionPath = buildSessionPath(sessionId)
   if (window.location.pathname === sessionPath) {
@@ -60,6 +67,10 @@ export function startLiveGameClient() {
 
   socket.on('shutdown-updated', (shutdown) => {
     useLiveGameStore.getState().setShutdownState(shutdown)
+  })
+
+  socket.on('admin-message', (broadcast) => {
+    showAdminMessageToast(broadcast.message, broadcast.sentAt)
   })
 
   socket.on('disconnect', () => {

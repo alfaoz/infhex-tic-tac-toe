@@ -18,6 +18,7 @@ function AdminRoute() {
         isLoading
         errorMessage={null}
         onBack={() => void navigate('/')}
+        onOpenControls={() => void navigate('/admin')}
         onRefresh={() => void adminStatsQuery.refetch()}
         onOpenGame={(gameId) => void navigate(`/games/${encodeURIComponent(gameId)}`)}
       />
@@ -34,6 +35,7 @@ function AdminRoute() {
       isLoading={adminStatsQuery.isLoading || adminStatsQuery.isRefetching}
       errorMessage={adminStatsQuery.error instanceof Error ? adminStatsQuery.error.message : null}
       onBack={() => void navigate('/')}
+      onOpenControls={() => void navigate('/admin')}
       onRefresh={() => void adminStatsQuery.refetch()}
       onOpenGame={(gameId) => void navigate(`/games/${encodeURIComponent(gameId)}`)}
     />

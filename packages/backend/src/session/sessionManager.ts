@@ -190,6 +190,26 @@ export class SessionManager {
         return { ...this.scheduledShutdown };
     }
 
+    cancelShutdown(): boolean {
+        if (!this.scheduledShutdown) {
+            return false;
+        }
+
+        const cancelledShutdown = { ...this.scheduledShutdown };
+        this.scheduledShutdown = null;
+        this.shutdownRequested = false;
+        this.clearScheduledShutdownTimer();
+        this.emitShutdownUpdated();
+        this.logger.info({
+            event: 'shutdown.cancelled',
+            scheduledAt: cancelledShutdown.scheduledAt,
+            shutdownAt: cancelledShutdown.shutdownAt,
+            activeSessionCount: this.sessions.size
+        }, 'Cancelled scheduled server shutdown');
+
+        return true;
+    }
+
     createSession(params: CreateSessionParams): CreateSessionResponse {
         if (this.scheduledShutdown) {
             throw new SessionError('Server shutdown is scheduled. New games cannot be created.');

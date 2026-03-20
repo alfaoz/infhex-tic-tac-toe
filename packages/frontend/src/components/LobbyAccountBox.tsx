@@ -216,7 +216,7 @@ function LobbySignedInAccount({ account, onViewOwnFinishedGames, onViewAdmin }: 
                 onClick={onViewAdmin}
                 className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-100 transition hover:bg-amber-300/20"
               >
-                Admin Dashboard
+                Admin Controls
               </button>
             )}
             <button
