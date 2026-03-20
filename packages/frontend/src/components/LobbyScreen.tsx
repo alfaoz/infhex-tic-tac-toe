@@ -107,7 +107,7 @@ function LobbyScreen({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.3em] text-sky-200/80">Live Sessions</p>
-                <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Lobbies and Live Games</h2>
+                <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">Public Matches</h2>
               </div>
               <div className="rounded-2xl bg-white/5 px-3 py-2 text-right sm:px-4 sm:py-3">
                 <div className="text-2xl font-bold text-white">{liveSessions.length}</div>
@@ -131,19 +131,16 @@ function LobbyScreen({
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-[11px] uppercase tracking-[0.22em] text-sky-200/75 sm:text-xs sm:tracking-[0.28em]">Session</div>
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${session.canJoin
-                          ? 'bg-emerald-400/15 text-emerald-200'
-                          : 'bg-sky-400/15 text-sky-200'
-                          }`}>
-                          {session.canJoin ? 'Open Lobby' : 'Active Game'}
-                        </span>
-                        <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
-                          {session.lobbyOptions.visibility}
-                        </span>
-                        <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
-                          {formatTimeControl(session.lobbyOptions.timeControl)}
-                        </span>
-                      </div>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${session.canJoin
+                            ? 'bg-emerald-400/15 text-emerald-200'
+                            : 'bg-sky-400/15 text-sky-200'
+                            }`}>
+                            {session.canJoin ? 'Open Lobby' : 'Active Game'}
+                          </span>
+                          <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
+                            {formatTimeControl(session.lobbyOptions.timeControl)}
+                          </span>
+                        </div>
                         <div className="mt-2 break-all text-xl font-bold text-white sm:text-2xl">{session.id}</div>
                         {session.canJoin && (
                           <div className="mt-2 text-sm text-slate-300">Players waiting: {session.playerCount}/{session.maxPlayers}</div>

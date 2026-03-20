@@ -89,8 +89,9 @@ function CreateLobbyDialog({
   onClose,
   onCreateLobby
 }: Readonly<CreateLobbyDialogProps>) {
+  const timeControlInDevelopment = true
   const [visibility, setVisibility] = useState<LobbyVisibility>('public')
-  const [timeControlMode, setTimeControlMode] = useState<LobbyTimeControl['mode']>('unlimited')
+  const [timeControlMode, setTimeControlMode] = useState<LobbyTimeControl['mode']>('turn')
   const [turnTimeStepIndex, setTurnTimeStepIndex] = useState(TURN_TIME_STEP_SECONDS.indexOf(TURN_TIME_DEFAULT))
   const [matchTimeStepIndex, setMatchTimeStepIndex] = useState(MATCH_TIME_STEP_MINUTES.indexOf(MATCH_TIME_DEFAULT))
   const [incrementStepIndex, setIncrementStepIndex] = useState(INCREMENT_STEP_SECONDS.indexOf(INCREMENT_DEFAULT))
@@ -143,174 +144,179 @@ function CreateLobbyDialog({
       />
       <div className="relative z-10 flex min-h-full items-center justify-center">
         <section className="relative my-auto w-full max-w-3xl overflow-hidden rounded-[1.4rem] border border-white/10 bg-[linear-gradient(155deg,_rgba(15,23,42,0.97),_rgba(17,24,39,0.95)_55%,_rgba(30,41,59,0.92))] p-4 text-white shadow-[0_24px_100px_rgba(2,6,23,0.6)] sm:p-5">
-        <div className="absolute -right-12 -top-16 h-24 w-24 rounded-full bg-sky-400/18 blur-3xl" />
-        <div className="absolute -left-10 bottom-0 h-20 w-20 rounded-full bg-amber-300/14 blur-3xl" />
+          <div className="absolute -right-12 -top-16 h-24 w-24 rounded-full bg-sky-400/18 blur-3xl" />
+          <div className="absolute -left-10 bottom-0 h-20 w-20 rounded-full bg-amber-300/14 blur-3xl" />
 
-        <div className="relative">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Create Lobby</div>
-              <h2 className="mt-1.5 text-xl font-black uppercase tracking-[0.05em] text-white sm:text-2xl">
-                Lobby Setup
-              </h2>
-              <p className="mt-1 text-sm text-slate-300">
-                Pick who can find it and how the clock should be configured.
-              </p>
+          <div className="relative">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Create Lobby</div>
+                <h2 className="mt-1.5 text-xl font-black uppercase tracking-[0.05em] text-white sm:text-2xl">
+                  Lobby Setup
+                </h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Pick who can find it and how the clock should be configured.
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:bg-white/12"
+              >
+                Close
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:bg-white/12"
-            >
-              Close
-            </button>
-          </div>
 
-          <div className="mt-4 space-y-3">
-            <section className="rounded-[1.1rem] border border-white/10 bg-white/5 p-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Visibility</div>
-                  <div className="mt-1 text-sm text-slate-300">Who can find this lobby?</div>
+            <div className="mt-4 space-y-3">
+              <section className="rounded-[1.1rem] border border-white/10 bg-white/5 p-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Visibility</div>
+                    <div className="mt-1 text-sm text-slate-300">Who can find this lobby?</div>
+                  </div>
+                  <div className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-100">
+                    {visibility}
+                  </div>
                 </div>
-                <div className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-100">
-                  {visibility}
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {visibilityOptions.map((option) => {
+                    const selected = visibility === option.value
+
+                    return (
+                      <SelectableOptions
+                        key={option.value}
+
+                        onClick={() => setVisibility(option.value)}
+                        selected={selected}
+
+                        title={option.title}
+                        description={option.description}
+                      />
+                    )
+                  })}
                 </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {visibilityOptions.map((option) => {
-                  const selected = visibility === option.value
+              </section>
 
-                  return (
-                    <SelectableOptions
-                      key={option.value}
-
-                      onClick={() => setVisibility(option.value)}
-                      selected={selected}
-
-                      title={option.title}
-                      description={option.description}
-                    />
-                  )
-                })}
-              </div>
-            </section>
-
-            <section className="rounded-[1.1rem] border border-white/10 bg-white/5 p-3.5">
-              <div className="flex items-center justify-between gap-3">
+              <section className="pointer-events-none rounded-[1.1rem] border border-white/10 bg-white/5 p-3.5 relative">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Time Control</div>
                   <div className="mt-1 text-sm text-slate-300">How should the clock work?</div>
                 </div>
-                <div className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-100">
-                  {formatTimeControl(selectedTimeControl)}
+
+                <div className="relative mt-4">
+                  <fieldset disabled={timeControlInDevelopment} className={timeControlInDevelopment ? 'opacity-40 grayscale' : ''}>
+                    <div className="grid gap-3 md:grid-cols-1 xl:grid-cols-3">
+                      {timeControlModeOptions.map((option) => {
+                        const selected = timeControlMode === option.value
+
+                        return (
+                          <SelectableOptions
+                            key={option.value}
+                            onClick={() => setTimeControlMode(option.value)}
+                            selected={selected}
+                            title={option.title}
+                            description={option.description}
+                          />
+                        )
+                      })}
+                    </div>
+
+                    <div className="mt-3 lg:h-[8em] rounded-[0.95rem] border border-white/10 bg-slate-950/35 p-3.5 flex flex-col">
+                      {timeControlMode === 'unlimited' ? (
+                        <div className="text-sm leading-5 text-slate-300 my-auto text-center">
+                          No clock will be configured for this lobby.
+                        </div>
+                      ) : timeControlMode === 'turn' ? (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Turn Time</div>
+                            <div className="mt-1 text-xl font-bold text-white">{formatStepSeconds(turnTimeSeconds)}</div>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={TURN_TIME_STEP_SECONDS.length - 1}
+                            step={1}
+                            value={turnTimeStepIndex}
+                            onChange={(event) => setTurnTimeStepIndex(Number(event.target.value))}
+                            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
+                          />
+                          <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            <span>5s</span>
+                            <span>120s</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Main Time</div>
+                              <div className="mt-1 text-xl font-bold text-white">{matchTimeMinutes}m</div>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={MATCH_TIME_STEP_MINUTES.length - 1}
+                              step={1}
+                              value={matchTimeStepIndex}
+                              onChange={(event) => setMatchTimeStepIndex(Number(event.target.value))}
+                              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
+                            />
+                            <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                              <span>1m</span>
+                              <span>60m</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Increment</div>
+                              <div className="mt-1 text-xl font-bold text-white">{formatStepSeconds(incrementSeconds)}</div>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={INCREMENT_STEP_SECONDS.length - 1}
+                              step={1}
+                              value={incrementStepIndex}
+                              onChange={(event) => setIncrementStepIndex(Number(event.target.value))}
+                              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
+                            />
+                            <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                              <span>1s</span>
+                              <span>5m</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </fieldset>
                 </div>
-              </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-1 xl:grid-cols-3">
-                {timeControlModeOptions.map((option) => {
-                  const selected = timeControlMode === option.value
-
-                  return (
-                    <SelectableOptions
-                      key={option.value}
-
-                      onClick={() => setTimeControlMode(option.value)}
-                      selected={selected}
-
-                      title={option.title}
-                      description={option.description}
-                    />
-                  )
-                })}
-              </div>
-
-              <div className="mt-3 lg:h-[8em] rounded-[0.95rem] border border-white/10 bg-slate-950/35 p-3.5 flex flex-col">
-                {timeControlMode === 'unlimited' ? (
-                  <div className="text-sm leading-5 text-slate-300 my-auto text-center">
-                    No clock will be configured for this lobby.
-                  </div>
-                ) : timeControlMode === 'turn' ? (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Turn Time</div>
-                      <div className="mt-1 text-xl font-bold text-white">{formatStepSeconds(turnTimeSeconds)}</div>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={TURN_TIME_STEP_SECONDS.length - 1}
-                      step={1}
-                      value={turnTimeStepIndex}
-                      onChange={(event) => setTurnTimeStepIndex(Number(event.target.value))}
-                      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
-                    />
-                    <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                      <span>5s</span>
-                      <span>120s</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="space-y-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Main Time</div>
-                        <div className="mt-1 text-xl font-bold text-white">{matchTimeMinutes}m</div>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={MATCH_TIME_STEP_MINUTES.length - 1}
-                        step={1}
-                        value={matchTimeStepIndex}
-                        onChange={(event) => setMatchTimeStepIndex(Number(event.target.value))}
-                        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
-                      />
-                      <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                        <span>1m</span>
-                        <span>60m</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Increment</div>
-                        <div className="mt-1 text-xl font-bold text-white">{formatStepSeconds(incrementSeconds)}</div>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={INCREMENT_STEP_SECONDS.length - 1}
-                        step={1}
-                        value={incrementStepIndex}
-                        onChange={(event) => setIncrementStepIndex(Number(event.target.value))}
-                        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
-                      />
-                      <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                        <span>1s</span>
-                        <span>5m</span>
-                      </div>
+                {timeControlInDevelopment && (
+                  <div className="z-10 absolute inset-0 flex items-start justify-center rounded-[1rem] bg-black/75 flex-col">
+                    <div className="rounded-full border border-white/15 bg-slate-950/85 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.45)] self-center">
+                      In Development
                     </div>
                   </div>
                 )}
-              </div>
-            </section>
-          </div>
+              </section>
+            </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <button
-              onClick={onClose}
-              className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:bg-white/12"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreate}
-              className="rounded-full bg-amber-300 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-amber-200"
-            >
-              Create Lobby
-            </button>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <button
+                onClick={onClose}
+                className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:bg-white/12"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                className="rounded-full bg-amber-300 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-950 transition hover:-translate-y-0.5 hover:bg-amber-200"
+              >
+                Create Lobby
+              </button>
+            </div>
           </div>
-        </div>
         </section>
       </div>
     </div>
