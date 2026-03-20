@@ -17,8 +17,8 @@ type PlayerPresencePayload = Parameters<ServerToClientEvents['player-joined']>[0
 type GameStatePayload = Parameters<ServerToClientEvents['game-state']>[0]
 type SessionFinishedPayload = Parameters<ServerToClientEvents['session-finished']>[0]
 
-type LiveGameScreenState =
-  | { kind: 'lobby' }
+type SessionGameState =
+  | { kind: 'none' }
   | {
     kind: 'waiting'
     sessionId: string
@@ -64,16 +64,25 @@ type LiveGameScreenState =
     finishedGameId: string | null
   }
 
+type PendingSessionJoinState =
+  | { status: 'idle'; sessionId: null; errorMessage: null }
+  | { status: 'pending'; sessionId: string; errorMessage: null }
+  | { status: 'not-found'; sessionId: string; errorMessage: string }
+  | { status: 'failed'; sessionId: string; errorMessage: string }
+
 interface LiveGameStoreState {
   connection: {
     isConnected: boolean
     currentPlayerId: string
   }
   shutdown: ShutdownState | null
-  screen: LiveGameScreenState
+  screen: SessionGameState
+  pendingSessionJoin: PendingSessionJoinState
   setConnected: () => void
   setDisconnected: () => void
   setShutdownState: (shutdown: ShutdownState | null) => void
+  startJoiningSession: (sessionId: string) => void
+  failJoiningSession: (sessionId: string, errorMessage: string) => void
   joinSession: (payload: SessionJoinedPayload) => void
   updatePlayers: (payload: PlayerPresencePayload) => void
   updateBoard: (payload: GameStatePayload) => void
@@ -82,7 +91,7 @@ interface LiveGameStoreState {
   resetToLobby: () => void
 }
 
-type ActiveLiveGameScreenState = Exclude<LiveGameScreenState, { kind: 'lobby' }>
+type ActiveSessionGameState = Exclude<SessionGameState, { kind: 'none' }>
 
 function createEmptyBoardState(): BoardState {
   return {
@@ -113,13 +122,13 @@ function clonePlayerNames(playerNames: PlayerNames): PlayerNames {
   return { ...playerNames }
 }
 
-function isActiveLiveGameScreenState(screen: LiveGameScreenState): screen is ActiveLiveGameScreenState {
-  return screen.kind !== 'lobby'
+function isActiveSessionGameState(screen: SessionGameState): screen is ActiveSessionGameState {
+  return screen.kind !== 'none'
 }
 
 function isFinishedScreenState(
-  screen: ActiveLiveGameScreenState
-): screen is Extract<LiveGameScreenState, { kind: 'finished-player' | 'finished-spectator' }> {
+  screen: ActiveSessionGameState
+): screen is Extract<SessionGameState, { kind: 'finished-player' | 'finished-spectator' }> {
   return screen.kind === 'finished-player' || screen.kind === 'finished-spectator'
 }
 
@@ -135,7 +144,7 @@ function createLiveSessionScreenState(params: {
   playerNames: PlayerNames
   lobbyOptions: LobbyOptions
   boardState: BoardState
-}): Extract<LiveGameScreenState, { kind: 'waiting' | 'playing' }> {
+}): Extract<SessionGameState, { kind: 'waiting' | 'playing' }> {
   return {
     kind: toPlayableSessionState(params.sessionState) === 'ingame' ? 'playing' : 'waiting',
     sessionId: params.sessionId,
@@ -147,8 +156,8 @@ function createLiveSessionScreenState(params: {
   }
 }
 
-export function getActiveSessionId(screen: LiveGameScreenState): string | null {
-  return isActiveLiveGameScreenState(screen) ? screen.sessionId : null
+export function getActiveSessionId(screen: SessionGameState): string | null {
+  return isActiveSessionGameState(screen) ? screen.sessionId : null
 }
 
 export const useLiveGameStore = create<LiveGameStoreState>()(
@@ -158,7 +167,8 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
       currentPlayerId: ''
     },
     shutdown: null,
-    screen: { kind: 'lobby' },
+    screen: { kind: 'none' },
+    pendingSessionJoin: { status: 'idle', sessionId: null, errorMessage: null },
     setConnected: () =>
       set((state) => {
         state.connection.isConnected = true
@@ -168,15 +178,37 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
         state.connection.isConnected = false
         state.connection.currentPlayerId = ''
         state.shutdown = null
-        state.screen = { kind: 'lobby' }
+        state.screen = { kind: 'none' }
+        state.pendingSessionJoin = { status: 'idle', sessionId: null, errorMessage: null }
       }),
     setShutdownState: (shutdown) =>
       set((state) => {
         state.shutdown = shutdown ? { ...shutdown } : null
       }),
+    startJoiningSession: (sessionId) =>
+      set((state) => {
+        state.pendingSessionJoin = {
+          status: 'pending',
+          sessionId,
+          errorMessage: null
+        }
+      }),
+    failJoiningSession: (sessionId, errorMessage) =>
+      set((state) => {
+        if (state.pendingSessionJoin.sessionId !== sessionId) {
+          return
+        }
+
+        state.pendingSessionJoin = {
+          status: errorMessage === 'Session not found' ? 'not-found' : 'failed',
+          sessionId,
+          errorMessage
+        }
+      }),
     joinSession: (payload) =>
       set((state) => {
         state.connection.currentPlayerId = payload.participantId
+        state.pendingSessionJoin = { status: 'idle', sessionId: null, errorMessage: null }
         state.screen = createLiveSessionScreenState({
           sessionId: payload.sessionId,
           sessionState: payload.state,
@@ -190,7 +222,7 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
     updatePlayers: (payload) =>
       set((state) => {
         const currentScreen = state.screen
-        if (!isActiveLiveGameScreenState(currentScreen) || isFinishedScreenState(currentScreen)) {
+        if (!isActiveSessionGameState(currentScreen) || isFinishedScreenState(currentScreen)) {
           return
         }
 
@@ -208,7 +240,7 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
       set((state) => {
         const currentScreen = state.screen
         if (
-          !isActiveLiveGameScreenState(currentScreen) ||
+          !isActiveSessionGameState(currentScreen) ||
           isFinishedScreenState(currentScreen) ||
           currentScreen.sessionId !== payload.sessionId
         ) {
@@ -228,7 +260,7 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
     finishSession: (payload) =>
       set((state) => {
         const currentScreen = state.screen
-        if (!isActiveLiveGameScreenState(currentScreen) || currentScreen.sessionId !== payload.sessionId) {
+        if (!isActiveSessionGameState(currentScreen) || currentScreen.sessionId !== payload.sessionId) {
           return
         }
 
@@ -275,7 +307,8 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
       }),
     resetToLobby: () =>
       set((state) => {
-        state.screen = { kind: 'lobby' }
+        state.pendingSessionJoin = { status: 'idle', sessionId: null, errorMessage: null }
+        state.screen = { kind: 'none' }
       })
   }))
 )

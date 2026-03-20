@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AccountProfile } from '@ih3t/shared'
+import { useLocation } from 'react-router'
 import { toast } from 'react-toastify'
 import { signInWithDiscord, signOutAccount, updateAccountUsername } from '../authClient'
 import { queryClient } from '../queryClient'
@@ -15,14 +16,6 @@ function showSuccessToast(message: string) {
   toast.success(message, {
     toastId: `success:${message}`
   })
-}
-
-function hasPendingInvite() {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  return new URLSearchParams(window.location.search).has('join')
 }
 
 function LobbyAccountSkeleton() {
@@ -43,7 +36,11 @@ function LobbyAccountSkeleton() {
   )
 }
 
-function LobbyGuestDisplay() {
+interface LobbyGuestDisplayProps {
+  hasPendingInvite: boolean
+}
+
+function LobbyGuestDisplay({ hasPendingInvite }: LobbyGuestDisplayProps) {
   const handleSignIn = async () => {
     try {
       await signInWithDiscord()
@@ -63,7 +60,7 @@ function LobbyGuestDisplay() {
           <div className="text-xs uppercase tracking-[0.28em] text-slate-300">Guest Access</div>
           <div className="mt-1 text-xl font-bold text-white">Play Without An Account</div>
           <div className="mt-1 text-sm text-slate-400">
-            {hasPendingInvite()
+            {hasPendingInvite
               ? 'You can accept this invite as a guest, but only signed-in players get a custom username.'
               : 'Guests can host, join, and spectate. Sign in with Discord if you want a custom username.'}
           </div>
@@ -220,6 +217,8 @@ function LobbySignedInAccount({ account }: LobbySignedInAccountProps) {
 }
 
 function LobbyAccountBox() {
+  const location = useLocation()
+  const hasPendingInvite = new URLSearchParams(location.search).has('join')
   const accountQuery = useQueryAccount()
   const account = accountQuery.data?.user ?? null
 
@@ -229,7 +228,7 @@ function LobbyAccountBox() {
   } else if (account) {
     inner = <LobbySignedInAccount account={account} />
   } else {
-    inner = <LobbyGuestDisplay />
+    inner = <LobbyGuestDisplay hasPendingInvite={hasPendingInvite} />
   }
 
   return (

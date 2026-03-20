@@ -103,6 +103,17 @@ export function startLiveGameClient() {
 
   socket.on('error', (error: string) => {
     console.error('Socket error:', error)
+    const currentState = useLiveGameStore.getState()
+    const pendingJoin = currentState.pendingSessionJoin
+
+    if (pendingJoin.status === 'pending' && pendingJoin.sessionId) {
+      currentState.failJoiningSession(pendingJoin.sessionId, error)
+      const isSessionRoute = window.location.pathname === `/session/${encodeURIComponent(pendingJoin.sessionId)}`
+      if (error === 'Session not found' && isSessionRoute) {
+        return
+      }
+    }
+
     showErrorToast(error)
   })
 }
@@ -128,7 +139,7 @@ export async function fetchAvailableSessions() {
   }
 }
 
-export async function hostGame(request: CreateSessionRequest) {
+export async function hostGame(request: CreateSessionRequest): Promise<string | null> {
   try {
     const data = await fetchJson<CreateSessionResponse>('/api/sessions', {
       method: 'POST',
@@ -137,16 +148,17 @@ export async function hostGame(request: CreateSessionRequest) {
       },
       body: JSON.stringify(request)
     })
-    socket?.emit('join-session', {
-      sessionId: data.sessionId
-    })
+    return data.sessionId;
   } catch (error) {
     console.error('Failed to create session:', error)
     showErrorToast(error instanceof Error ? error.message : 'Failed to create a session.')
   }
+
+  return null;
 }
 
 export function joinGame(sessionId: string) {
+  useLiveGameStore.getState().startJoiningSession(sessionId)
   socket?.emit('join-session', {
     sessionId
   })
