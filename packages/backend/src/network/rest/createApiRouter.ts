@@ -4,7 +4,7 @@ import {
     DEFAULT_LOBBY_OPTIONS,
     type CreateSessionRequest,
     type CreateSessionResponse,
-    type LobbyTimeControl,
+    type GameTimeControl,
     type LobbyOptions,
 } from '@ih3t/shared';
 import { getRequestClientInfo } from '../clientInfo';
@@ -74,7 +74,7 @@ export class ApiRouter {
     private parseLobbyOptions(body: unknown): LobbyOptions {
         const request = (body ?? {}) as CreateSessionRequest;
         const visibility = request.lobbyOptions?.visibility;
-        const timeControl = this.parseLobbyTimeControl(request.lobbyOptions?.timeControl);
+        const timeControl = this.parseGameTimeControl(request.lobbyOptions?.timeControl);
 
         return {
             visibility: visibility === 'private' || visibility === 'public'
@@ -84,12 +84,12 @@ export class ApiRouter {
         };
     }
 
-    private parseLobbyTimeControl(value: unknown): LobbyTimeControl {
+    private parseGameTimeControl(value: unknown): GameTimeControl {
         if (!value || typeof value !== 'object') {
             return { ...DEFAULT_LOBBY_OPTIONS.timeControl };
         }
 
-        const candidate = value as Partial<LobbyTimeControl> & Record<string, unknown>;
+        const candidate = value as Partial<GameTimeControl> & Record<string, unknown>;
         if (candidate.mode === 'turn') {
             return {
                 mode: 'turn',
@@ -101,7 +101,7 @@ export class ApiRouter {
             return {
                 mode: 'match',
                 mainTimeMs: this.clampMilliseconds(candidate.mainTimeMs, 60_000, 3_600_000),
-                incrementMs: this.clampMilliseconds(candidate.incrementMs, 1_000, 300_000)
+                incrementMs: this.clampMilliseconds(candidate.incrementMs, 0, 300_000)
             };
         }
 

@@ -4,20 +4,21 @@ export type SessionParticipantRole = 'player' | 'spectator';
 export type CellOccupant = string & { _type?: "CellOccupant" };
 export type SessionFinishReason = 'disconnect' | 'timeout' | 'terminated' | 'six-in-a-row';
 export type LobbyVisibility = 'public' | 'private';
-export type LobbyTimeControl =
+export type GameTimeControl =
     | { mode: 'unlimited' }
     | { mode: 'turn'; turnTimeMs: number }
     | { mode: 'match'; mainTimeMs: number; incrementMs: number };
 
 export interface LobbyOptions {
     visibility: LobbyVisibility;
-    timeControl: LobbyTimeControl;
+    timeControl: GameTimeControl;
 }
 
 export const DEFAULT_LOBBY_OPTIONS: LobbyOptions = {
     visibility: 'public',
     timeControl: {
-        mode: 'unlimited'
+        mode: 'turn',
+        turnTimeMs: 45_000
     }
 };
 
@@ -37,6 +38,7 @@ export interface BoardState {
     currentTurnPlayerId: string | null;
     placementsRemaining: number;
     currentTurnExpiresAt: number | null;
+    playerTimeRemainingMs: Record<string, number>;
 }
 
 // Game Session Types

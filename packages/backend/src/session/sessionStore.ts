@@ -107,7 +107,8 @@ export function createStoredGameSession(
             cells: [],
             currentTurnPlayerId: null,
             placementsRemaining: 0,
-            currentTurnExpiresAt: null
+            currentTurnExpiresAt: null,
+            playerTimeRemainingMs: {}
         }
     };
 }

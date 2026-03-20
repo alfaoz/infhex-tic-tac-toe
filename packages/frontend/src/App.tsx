@@ -263,6 +263,7 @@ function App() {
         participantRole={liveScreen.participantRole}
         currentPlayerId={connection.currentPlayerId}
         boardState={liveScreen.boardState}
+        timeControl={liveScreen.lobbyOptions.timeControl}
         shutdown={shutdown}
         onPlaceCell={placeCell}
         onLeave={leaveGame}

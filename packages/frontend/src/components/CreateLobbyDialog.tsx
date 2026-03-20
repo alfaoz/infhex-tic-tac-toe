@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { CreateSessionRequest, LobbyTimeControl, LobbyVisibility } from '@ih3t/shared'
-import { formatTimeControl } from '../lobbyOptions'
+import type { CreateSessionRequest, GameTimeControl, LobbyVisibility } from '@ih3t/shared'
 
 interface CreateLobbyDialogProps {
   isOpen: boolean
@@ -26,7 +25,7 @@ const visibilityOptions: Array<{
   ]
 
 const timeControlModeOptions: Array<{
-  value: LobbyTimeControl['mode']
+  value: GameTimeControl['mode']
   title: string
   description: string
 }> = [
@@ -43,7 +42,7 @@ const timeControlModeOptions: Array<{
     {
       value: 'match',
       title: 'Match Based',
-      description: 'A main clock between 1m and 60m plus an increment between 1s and 5m.'
+      description: 'A main clock between 1m and 60m plus an increment between 0s and 5m.'
     }
   ]
 
@@ -89,9 +88,8 @@ function CreateLobbyDialog({
   onClose,
   onCreateLobby
 }: Readonly<CreateLobbyDialogProps>) {
-  const timeControlInDevelopment = true
   const [visibility, setVisibility] = useState<LobbyVisibility>('public')
-  const [timeControlMode, setTimeControlMode] = useState<LobbyTimeControl['mode']>('turn')
+  const [timeControlMode, setTimeControlMode] = useState<GameTimeControl['mode']>('unlimited')
   const [turnTimeStepIndex, setTurnTimeStepIndex] = useState(TURN_TIME_STEP_SECONDS.indexOf(TURN_TIME_DEFAULT))
   const [matchTimeStepIndex, setMatchTimeStepIndex] = useState(MATCH_TIME_STEP_MINUTES.indexOf(MATCH_TIME_DEFAULT))
   const [incrementStepIndex, setIncrementStepIndex] = useState(INCREMENT_STEP_SECONDS.indexOf(INCREMENT_DEFAULT))
@@ -100,7 +98,7 @@ function CreateLobbyDialog({
   const matchTimeMinutes = MATCH_TIME_STEP_MINUTES[matchTimeStepIndex]
   const incrementSeconds = INCREMENT_STEP_SECONDS[incrementStepIndex]
 
-  const selectedTimeControl = useMemo<LobbyTimeControl>(() => {
+  const selectedTimeControl = useMemo<GameTimeControl>(() => {
     if (timeControlMode === 'turn') {
       return {
         mode: 'turn',
@@ -196,14 +194,14 @@ function CreateLobbyDialog({
                 </div>
               </section>
 
-              <section className="pointer-events-none rounded-[1.1rem] border border-white/10 bg-white/5 p-3.5 relative">
+              <section className="rounded-[1.1rem] border border-white/10 bg-white/5 p-3.5 relative">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Time Control</div>
                   <div className="mt-1 text-sm text-slate-300">How should the clock work?</div>
                 </div>
 
                 <div className="relative mt-4">
-                  <fieldset disabled={timeControlInDevelopment} className={timeControlInDevelopment ? 'opacity-40 grayscale' : ''}>
+                  <fieldset>
                     <div className="grid gap-3 md:grid-cols-1 xl:grid-cols-3">
                       {timeControlModeOptions.map((option) => {
                         const selected = timeControlMode === option.value
@@ -282,7 +280,7 @@ function CreateLobbyDialog({
                               className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-sky-300"
                             />
                             <div className="flex justify-between text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                              <span>1s</span>
+                              <span>0s</span>
                               <span>5m</span>
                             </div>
                           </div>
@@ -291,14 +289,6 @@ function CreateLobbyDialog({
                     </div>
                   </fieldset>
                 </div>
-
-                {timeControlInDevelopment && (
-                  <div className="z-10 absolute inset-0 flex items-start justify-center rounded-[1rem] bg-black/75 flex-col">
-                    <div className="rounded-full border border-white/15 bg-slate-950/85 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.45)] self-center">
-                      In Development
-                    </div>
-                  </div>
-                )}
               </section>
             </div>
 

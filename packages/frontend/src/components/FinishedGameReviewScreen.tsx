@@ -48,7 +48,8 @@ function buildReplayBoardState(game: FinishedGameRecord | null, visibleMoveCount
       cells: [],
       currentTurnPlayerId: null,
       placementsRemaining: 0,
-      currentTurnExpiresAt: null
+      currentTurnExpiresAt: null,
+      playerTimeRemainingMs: {}
     }
   }
 
@@ -60,7 +61,8 @@ function buildReplayBoardState(game: FinishedGameRecord | null, visibleMoveCount
     })),
     currentTurnPlayerId: null,
     placementsRemaining: 0,
-    currentTurnExpiresAt: null
+    currentTurnExpiresAt: null,
+    playerTimeRemainingMs: {}
   }
 }
 

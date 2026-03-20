@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { BoardState, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
-import { playCountdownWarningSound, playTilePlacedSound } from '../soundEffects'
+import type { BoardState, GameTimeControl, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
+import { playTilePlacedSound } from '../soundEffects'
 import GameBoardCanvas from './game-screen/GameBoardCanvas'
 import GameScreenHud from './game-screen/GameScreenHud'
-import GameScreenStatus from './game-screen/GameScreenStatus'
-import { TURN_TIMEOUT_MS, getCellKey, getPlayerColor, getPlayerLabel } from './game-screen/gameBoardUtils'
+import TurnTimerHud from './game-screen/TurnTimerHud'
+import { getCellKey, getPlayerColor } from './game-screen/gameBoardUtils'
 import useGameBoard from './game-screen/useGameBoard'
 
 interface GameScreenProps {
@@ -13,6 +13,7 @@ interface GameScreenProps {
   participantRole: SessionParticipantRole
   currentPlayerId: string
   boardState: BoardState
+  timeControl?: GameTimeControl
   shutdown: ShutdownState | null
   onPlaceCell: (x: number, y: number) => void
   onLeave: () => void
@@ -29,44 +30,30 @@ function GameScreen({
   participantRole,
   currentPlayerId,
   boardState,
+  timeControl,
   shutdown,
   onPlaceCell,
   onLeave,
   overlay,
   interactionEnabled = true
 }: Readonly<GameScreenProps>) {
-  const [turnCountdownMs, setTurnCountdownMs] = useState<number | null>(TURN_TIMEOUT_MS)
   const [highlightedCellKeys, setHighlightedCellKeys] = useState<string[]>([])
   const previousBoardStateRef = useRef<BoardState | null>(null)
   const previousCellCountRef = useRef(boardState.cells.length)
   const ongoingOpponentTurnKeysRef = useRef<string[]>([])
   const lastOpponentTurnKeysRef = useRef<string[]>([])
-  const lastCountdownWarningSecondRef = useRef<number | null>(null)
 
+  const effectiveTimeControl: GameTimeControl = timeControl ?? { mode: 'unlimited' }
   const isSpectator = participantRole === 'spectator'
   const ownColor = getPlayerColor(players, currentPlayerId)
   const isOwnTurn = Boolean(currentPlayerId) && boardState.currentTurnPlayerId === currentPlayerId
   const canPlaceCell = interactionEnabled && !isSpectator && isOwnTurn
-  const activePlayerLabel = getPlayerLabel(players, boardState.currentTurnPlayerId)
-
-  const turnHeadline = isSpectator
-    ? 'Spectator mode'
-    : isOwnTurn
-      ? 'Your turn'
-      : 'Opponents turn'
-
-  const turnDetail = isSpectator
-    ? `${activePlayerLabel} is playing. You can pan and zoom, but only active players can place cells.`
-    : isOwnTurn
-      ? `Place ${boardState.placementsRemaining} more ${boardState.placementsRemaining === 1 ? 'cell' : 'cells'}.`
-      : `Waiting for the other player to finish ${boardState.placementsRemaining} ${boardState.placementsRemaining === 1 ? 'move' : 'moves'}.`
 
   useEffect(() => {
     previousBoardStateRef.current = null
     previousCellCountRef.current = boardState.cells.length
     ongoingOpponentTurnKeysRef.current = []
     lastOpponentTurnKeysRef.current = []
-    lastCountdownWarningSecondRef.current = null
     setHighlightedCellKeys([])
   }, [currentPlayerId, participantRole])
 
@@ -154,41 +141,6 @@ function GameScreen({
     previousCellCountRef.current = boardState.cells.length
   }, [boardState.cells.length, interactionEnabled])
 
-  useEffect(() => {
-    const expiresAt = boardState.currentTurnExpiresAt
-    if (!expiresAt) {
-      setTurnCountdownMs(null)
-      return
-    }
-
-    const updateCountdown = () => {
-      setTurnCountdownMs(Math.max(0, expiresAt - Date.now()))
-    }
-
-    updateCountdown()
-    const interval = window.setInterval(updateCountdown, 250)
-    return () => window.clearInterval(interval)
-  }, [boardState.currentTurnExpiresAt])
-
-  useEffect(() => {
-    if (!interactionEnabled || isSpectator || !isOwnTurn || turnCountdownMs === null || turnCountdownMs > 10_000) {
-      lastCountdownWarningSecondRef.current = null
-      return
-    }
-
-    const remainingWarningSecond = Math.floor(turnCountdownMs / 1000)
-    if (remainingWarningSecond < 1 || remainingWarningSecond > 9) {
-      return
-    }
-
-    if (lastCountdownWarningSecondRef.current === remainingWarningSecond) {
-      return
-    }
-
-    lastCountdownWarningSecondRef.current = remainingWarningSecond
-    playCountdownWarningSound()
-  }, [interactionEnabled, isOwnTurn, isSpectator, turnCountdownMs])
-
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-slate-950 text-white">
       <GameBoardCanvas
@@ -200,13 +152,11 @@ function GameScreen({
       <div className="pointer-events-none absolute inset-0">
         <div className="flex h-full flex-col justify-between gap-4">
           {interactionEnabled && (
-            <GameScreenStatus
-              canPlaceCell={canPlaceCell}
-              isSpectator={isSpectator}
-              placementsRemaining={boardState.placementsRemaining}
-              turnCountdownMs={turnCountdownMs}
-              turnHeadline={turnHeadline}
-              turnDetail={turnDetail}
+            <TurnTimerHud
+              effectiveTimeControl={effectiveTimeControl}
+              players={players}
+              currentTurnPlayerId={boardState.currentTurnPlayerId}
+              localPlayerId={isSpectator ? null : currentPlayerId}
             />
           )}
 

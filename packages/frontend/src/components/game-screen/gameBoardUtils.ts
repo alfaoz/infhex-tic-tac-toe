@@ -1,7 +1,6 @@
 import type { BoardCell } from '@ih3t/shared'
 
 export const HEX_RADIUS = 8
-export const TURN_TIMEOUT_MS = 45_000
 export const MIN_SCALE = 18
 export const MAX_SCALE = 96
 export const DEFAULT_SCALE = 42

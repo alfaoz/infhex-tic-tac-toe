@@ -84,14 +84,16 @@ function createEmptyBoardState(): BoardState {
     cells: [],
     currentTurnPlayerId: null,
     placementsRemaining: 0,
-    currentTurnExpiresAt: null
+    currentTurnExpiresAt: null,
+    playerTimeRemainingMs: {}
   }
 }
 
 function cloneBoardState(boardState: BoardState): BoardState {
   return {
     ...boardState,
-    cells: boardState.cells.map(cell => ({ ...cell }))
+    cells: boardState.cells.map(cell => ({ ...cell })),
+    playerTimeRemainingMs: { ...boardState.playerTimeRemainingMs }
   }
 }
 
