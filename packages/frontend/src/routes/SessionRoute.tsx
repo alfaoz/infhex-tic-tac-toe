@@ -227,7 +227,7 @@ function SessionRoute() {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'Join my Infinity Hexagonial Tic-Tac-Toe lobby',
+          title: 'Join my Infinity Hexagonal Tic-Tac-Toe lobby',
           text: 'Join my lobby directly with this link.',
           url: inviteUrl.toString()
         })

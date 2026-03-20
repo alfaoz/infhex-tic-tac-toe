@@ -16,9 +16,9 @@ import { SessionManager } from '../session/sessionManager';
 import { CorsConfiguration } from './cors';
 import { ApiRouter } from './rest/createApiRouter';
 
-const DEFAULT_PAGE_TITLE = 'Infinity Hexagonial Tic-Tac-Toe';
-const DEFAULT_PAGE_DESCRIPTION = 'Play Infinity Hexagonial Tic-Tac-Toe online, host a lobby, join live matches, and review finished games move by move.';
-const DEFAULT_OG_DESCRIPTION = 'Host a lobby, join live matches, and review finished Infinity Hexagonial Tic-Tac-Toe games online.';
+const DEFAULT_PAGE_TITLE = 'Infinity Hexagonal Tic-Tac-Toe';
+const DEFAULT_PAGE_DESCRIPTION = 'Play Infinity Hexagonal Tic-Tac-Toe online, host a lobby, join live matches, and review finished games move by move.';
+const DEFAULT_OG_DESCRIPTION = 'Host a lobby, join live matches, and review finished Infinity Hexagonal Tic-Tac-Toe games online.';
 
 interface PageMetadata {
     title: string;
@@ -134,18 +134,18 @@ function describePlayersWaiting(players: SessionParticipant[], visibility: strin
 function describePlayersInMatch(players: SessionParticipant[], visibility: string): string {
     const normalizedPlayerNames = getNormalizedPlayerNames(players);
     if (normalizedPlayerNames.length === 1) {
-        return `${normalizedPlayerNames[0]} is already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
+        return `${normalizedPlayerNames[0]} is already playing in a ${visibility} Infinity Hexagonal Tic-Tac-Toe match`;
     }
 
     if (normalizedPlayerNames.length === 2) {
-        return `${normalizedPlayerNames[0]} and ${normalizedPlayerNames[1]} are already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
+        return `${normalizedPlayerNames[0]} and ${normalizedPlayerNames[1]} are already playing in a ${visibility} Infinity Hexagonal Tic-Tac-Toe match`;
     }
 
     if (normalizedPlayerNames.length > 2) {
-        return `${normalizedPlayerNames[0]}, ${normalizedPlayerNames[1]}, and ${normalizedPlayerNames.length - 2} more are already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
+        return `${normalizedPlayerNames[0]}, ${normalizedPlayerNames[1]}, and ${normalizedPlayerNames.length - 2} more are already playing in a ${visibility} Infinity Hexagonal Tic-Tac-Toe match`;
     }
 
-    return `A ${visibility} Infinity Hexagonial Tic-Tac-Toe match is underway`;
+    return `A ${visibility} Infinity Hexagonal Tic-Tac-Toe match is underway`;
 }
 
 @injectable()
@@ -294,7 +294,7 @@ export class HttpApplication {
             return {
                 ...defaultMetadata,
                 title: `Finished Games Archive • ${DEFAULT_PAGE_TITLE}`,
-                description: 'Browse finished Infinity Hexagonial Tic-Tac-Toe matches and review their move history.',
+                description: 'Browse finished Infinity Hexagonal Tic-Tac-Toe matches and review their move history.',
             };
         }
 
@@ -302,7 +302,7 @@ export class HttpApplication {
             return {
                 ...defaultMetadata,
                 title: `My Match History • ${DEFAULT_PAGE_TITLE}`,
-                description: 'Review your own finished Infinity Hexagonial Tic-Tac-Toe matches while signed in.',
+                description: 'Review your own finished Infinity Hexagonal Tic-Tac-Toe matches while signed in.',
                 robots: 'noindex, nofollow'
             };
         }
@@ -311,7 +311,7 @@ export class HttpApplication {
             return {
                 ...defaultMetadata,
                 title: `Admin Dashboard • ${DEFAULT_PAGE_TITLE}`,
-                description: 'Administrative statistics for Infinity Hexagonial Tic-Tac-Toe.',
+                description: 'Administrative statistics for Infinity Hexagonal Tic-Tac-Toe.',
                 robots: 'noindex, nofollow'
             };
         }

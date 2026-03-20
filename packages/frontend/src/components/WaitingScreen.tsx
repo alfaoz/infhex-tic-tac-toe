@@ -29,7 +29,7 @@ function WaitingScreen({ sessionId, playerCount, playerNames, lobbyOptions, onIn
               <h1 className="mt-6 text-4xl font-black uppercase tracking-[0.08em] text-white sm:text-6xl">
                 Infinity
                 <br />
-                Hexagonial
+                Hexagonal
                 <br />
                 Tic-Tac-Toe
               </h1>

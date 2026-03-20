@@ -1,4 +1,4 @@
-# Infinity Hexagonial Tic-Tac-Toe
+# Infinity Hexagonal Tic-Tac-Toe
 
 Small monorepo for a real-time 2-player game inspired by the following YouTube video from webgoatguy:
 https://www.youtube.com/watch?v=Ob6QINTMIOA

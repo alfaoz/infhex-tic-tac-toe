@@ -81,7 +81,7 @@ function LobbyScreen({
               <h1 className="mt-5 text-3xl font-black uppercase tracking-[0.08em] text-white sm:mt-6 sm:text-5xl lg:text-6xl">
                 Infinity
                 <br />
-                Hexagonial
+                Hexagonal
                 <br />
                 Tic-Tac-Toe
               </h1>
