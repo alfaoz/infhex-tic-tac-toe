@@ -1,4 +1,4 @@
-import type { CreateSessionRequest, SessionInfo, ShutdownState } from '@ih3t/shared'
+import type { CreateSessionRequest, SessionInfo, SessionParticipant, ShutdownState } from '@ih3t/shared'
 import { useEffect, useState } from 'react'
 import CreateLobbyDialog from './CreateLobbyDialog'
 import { formatTimeControl } from '../lobbyOptions'
@@ -25,12 +25,12 @@ function formatLiveDuration(startedAt: number | null, now: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-function formatLobbyPlayers(playerNames: string[]) {
-  if (playerNames.length === 0) {
+function formatLobbyPlayers(players: SessionParticipant[]) {
+  if (players.length === 0) {
     return 'Waiting for first player'
   }
 
-  return playerNames.join(' vs ')
+  return players.map(player => player.displayName).join(' vs ')
 }
 
 function LobbyScreen({
@@ -52,6 +52,8 @@ function LobbyScreen({
 
     return () => window.clearInterval(interval)
   }, [])
+
+  const canJoinSession = (session: SessionInfo) => session.state === 'lobby' && session.players.length < 2
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.22),_transparent_30%),linear-gradient(135deg,_#111827,_#0f172a_45%,_#1e293b)] text-white">
@@ -132,28 +134,30 @@ function LobbyScreen({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {liveSessions.map((session) => (
+                  {liveSessions.map((session) => {
+                    const canJoin = canJoinSession(session)
+                    return (
                     <div
                       key={session.id}
                       className="flex flex-col gap-4 rounded-[1.5rem] border border-white/10 bg-white/6 p-4 shadow-lg sm:rounded-3xl sm:p-5 lg:flex-row lg:items-center lg:justify-between"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${session.canJoin
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${canJoin
                             ? 'bg-emerald-400/15 text-emerald-200'
                             : 'bg-sky-400/15 text-sky-200'
                             }`}>
-                            {session.canJoin ? 'Open Lobby' : 'Active Game'}
+                            {canJoin ? 'Open Lobby' : 'Active Game'}
                           </span>
                           <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
-                            {formatTimeControl(session.lobbyOptions.timeControl)}
+                            {formatTimeControl(session.gameOptions.timeControl)}
                           </span>
                         </div>
                         <div className="mt-2 break-all text-xl font-bold text-white sm:text-2xl">{session.id}</div>
                         <div className="mt-2 text-sm text-slate-400">
-                          {formatLobbyPlayers(session.playerNames)}
+                          {formatLobbyPlayers(session.players)}
                         </div>
-                        {!session.canJoin && session.startedAt && (
+                        {!canJoin && session.startedAt && (
                           <div className="text-sm text-slate-400">
                             In game for {formatLiveDuration(session.startedAt, now)}
                           </div>
@@ -164,15 +168,16 @@ function LobbyScreen({
                         disabled={!isConnected}
                         className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition lg:shrink-0 ${!isConnected
                           ? 'cursor-not-allowed bg-slate-500/60 text-slate-200'
-                          : session.canJoin
+                          : canJoin
                             ? 'bg-sky-400 text-slate-950 shadow-[0_10px_30px_rgba(56,189,248,0.28)] hover:-translate-y-0.5 hover:bg-sky-300'
                             : 'border border-white/15 bg-white/8 text-white hover:-translate-y-0.5 hover:bg-white/14'
                           }`}
                       >
-                        {session.canJoin ? 'Join Lobby' : 'Spectate'}
+                        {canJoin ? 'Join Lobby' : 'Spectate'}
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

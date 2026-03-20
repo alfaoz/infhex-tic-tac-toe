@@ -19,35 +19,36 @@ import { CorsConfiguration } from './cors';
 import { SessionError, SessionManager } from '../session/sessionManager';
 import type {
     JoinSessionResult,
-    PlayerJoinedEvent,
-    PlayerLeftEvent,
+    ParticipantJoinedEvent,
+    ParticipantLeftEvent,
     PublicGameStatePayload,
-    RematchUpdatedEvent,
-    SessionFinishedDomainEvent,
+    SessionUpdatedEvent,
 } from '../session/types';
-import { SessionStore } from '../session/sessionStore';
 
-const zSocketSessionId = z.string().trim().min(1);
 const zSocketJoinSessionRequest = z.union([z.string().trim().min(1), zJoinSessionRequest])
     .transform((request: string | JoinSessionRequest): JoinSessionRequest => typeof request === 'string' ? { sessionId: request } : request);
 
-type OrphanedParticipationId = {
-    deviceId: string,
+type Participation = {
+    sessionId: string,
     participantId: string,
+};
+
+type OrphanedParticipation = {
+    deviceId: string,
+    participation: Participation,
     timeout: ReturnType<typeof setTimeout>,
-}
+};
 
 @injectable()
 export class SocketServerGateway {
     private readonly logger: Logger;
-    private readonly socketParticipationId = new Map<string, string>();
-    private readonly orphanedParticipationIds = new Map<string, OrphanedParticipationId>();
+    private readonly socketParticipations = new Map<string, Participation>();
+    private readonly orphanedParticipations = new Map<string, OrphanedParticipation>();
     private io?: Server<ClientToServerEvents, ServerToClientEvents>;
 
     constructor(
         @inject(ROOT_LOGGER) rootLogger: Logger,
         @inject(AuthService) private readonly authService: AuthService,
-        @inject(SessionStore) private readonly sessionStore: SessionStore,
         @inject(SessionManager) private readonly sessionManager: SessionManager,
         @inject(BackgroundWorkerHub) private readonly backgroundWorkers: BackgroundWorkerHub,
         @inject(CorsConfiguration) private readonly corsConfiguration: CorsConfiguration
@@ -67,72 +68,37 @@ export class SocketServerGateway {
             shutdownUpdated(shutdown) {
                 io.emit('shutdown-updated', shutdown);
             },
+            sessionUpdated(event: SessionUpdatedEvent) {
+                io.to(event.sessionId).emit('session-updated', event);
+            },
             gameStateUpdated(payload: PublicGameStatePayload) {
                 io.to(payload.sessionId).emit('game-state', payload);
             },
-            playerJoined(event: PlayerJoinedEvent) {
-                io.to(event.sessionId).emit('player-joined', {
-                    playerId: event.playerId,
-                    players: event.players,
-                    playerNames: event.playerNames,
-                    state: event.state
-                });
+            participantJoined(event: ParticipantJoinedEvent) {
+                io.to(event.sessionId).emit('participant-joined', event);
             },
-            playerLeft(event: PlayerLeftEvent) {
-                io.to(event.sessionId).emit('player-left', {
-                    playerId: event.playerId,
-                    players: event.players,
-                    playerNames: event.playerNames,
-                    state: event.state
-                });
-            },
-            rematchUpdated: (event: RematchUpdatedEvent) => {
-                const payload = {
-                    sessionId: event.sessionId,
-                    canRematch: event.canRematch,
-                    requestedPlayerIds: event.requestedPlayerIds
-                };
-
-                for (const playerId of event.playerIds) {
-                    const playerSocket = this.getSocketForSessionParticipant(io, playerId);
-                    playerSocket?.emit('rematch-updated', payload);
-                }
-            },
-            sessionFinished(event: SessionFinishedDomainEvent) {
-                io.to(event.sessionId).emit('session-finished', event);
+            participantLeft(event: ParticipantLeftEvent) {
+                io.to(event.sessionId).emit('participant-left', event);
             }
         });
 
         io.on('connection', (socket) => {
             const clientInfo = getSocketClientInfo(socket);
-            const existingParticipantInfo = clientInfo.deviceId ? this.orphanedParticipationIds.get(clientInfo.deviceId) : null;
+            const existingParticipantInfo = clientInfo.deviceId ? this.orphanedParticipations.get(clientInfo.deviceId) : null;
             if (existingParticipantInfo) {
                 clearTimeout(existingParticipantInfo.timeout);
-                this.orphanedParticipationIds.delete(existingParticipantInfo.deviceId);
+                this.orphanedParticipations.delete(existingParticipantInfo.deviceId);
 
-                this.socketParticipationId.set(socket.id, existingParticipantInfo.participantId);
-
-                void (async () => {
-                    for (const session of this.sessionStore.findSessionsByParticipant(existingParticipantInfo.participantId)) {
-                        try {
-                            await this.socketJoinSession(socket, session.id);
-                        } catch (error: unknown) {
-                            logSocketActionFailure(this.logger, 'rejoin-session', socket, error, { sessionId: session.id });
-                            socket.emit('error', getSocketErrorMessage(error));
-                        }
-                    }
-                })();
-            } else {
-                /* assign a new id */
-                const participantId = randomUUID();
-                this.socketParticipationId.set(socket.id, participantId);
+                const participation = existingParticipantInfo.participation;
+                void this.socketJoinSession(socket, participation.sessionId, participation.participantId).catch(error => {
+                    logSocketActionFailure(this.logger, 'rejoin-session', socket, error, { sessionId: participation.sessionId });
+                    socket.emit('error', getSocketErrorMessage(error));
+                });
             }
 
-            const participantId = this.socketParticipationId.get(socket.id)!;
             this.logger.info({
                 event: 'socket.connected',
                 socketId: socket.id,
-                participantId,
                 reconnect: Boolean(existingParticipantInfo),
                 client: clientInfo
             }, 'Socket connected');
@@ -151,7 +117,9 @@ export class SocketServerGateway {
                 }
 
                 try {
-                    const joinResult = await this.socketJoinSession(socket, sessionId);
+                    const currentParticipation = this.socketParticipations.get(socket.id);
+                    const participantId = currentParticipation?.sessionId === sessionId ? currentParticipation.participantId : null;
+                    const joinResult = await this.socketJoinSession(socket, sessionId, participantId);
                     if (joinResult.role === 'player' && joinResult.isNewParticipant) {
                         this.sessionManager.activateSession(sessionId);
                     }
@@ -161,7 +129,7 @@ export class SocketServerGateway {
                         socketId: socket.id,
                         sessionId,
                         role: joinResult.role,
-                        state: joinResult.state,
+                        state: joinResult.session.state,
                         isNewParticipant: joinResult.isNewParticipant
                     }, 'Socket joined session');
                 } catch (error: unknown) {
@@ -170,140 +138,88 @@ export class SocketServerGateway {
                 }
             });
 
-            socket.on('leave-session', (sessionId: string) => {
-                let parsedSessionId: string;
-                try {
-                    parsedSessionId = zSocketSessionId.parse(sessionId);
-                } catch {
-                    socket.emit('error', 'Invalid session id.');
+            socket.on('leave-session', () => {
+                const participation = this.socketParticipations.get(socket.id);
+                if (!participation) {
                     return;
                 }
 
-                socket.leave(parsedSessionId);
-                this.sessionManager.leaveSession(parsedSessionId, participantId, 'leave-session');
+                this.socketParticipations.delete(socket.id);
+                socket.leave(participation.sessionId);
+                this.sessionManager.leaveSession(participation.sessionId, participation.participantId, 'leave-session');
             });
 
-            socket.on('surrender-session', (sessionId: string) => {
-                let parsedSessionId: string;
+            socket.on('surrender-session', () => {
                 try {
-                    parsedSessionId = zSocketSessionId.parse(sessionId);
-                } catch {
-                    socket.emit('error', 'Invalid session id.');
-                    return;
-                }
-
-                try {
-                    this.sessionManager.surrenderSession(parsedSessionId, participantId);
-                    socket.leave(parsedSessionId);
+                    const { sessionId, participantId } = this.requireParticipation(socket.id);
+                    this.sessionManager.surrenderSession(sessionId, participantId);
                 } catch (error: unknown) {
-                    logSocketActionFailure(this.logger, 'surrender-session', socket, error, { sessionId });
+                    logSocketActionFailure(this.logger, 'surrender-session', socket, error);
                     socket.emit('error', getSocketErrorMessage(error));
                 }
             });
 
-            socket.on('request-rematch', (finishedSessionId: string) => {
-                let parsedSessionId: string;
+            socket.on('request-rematch', () => {
                 try {
-                    parsedSessionId = zSocketSessionId.parse(finishedSessionId);
-                } catch {
-                    socket.emit('error', 'Invalid session id.');
-                    return;
-                }
-
-                try {
-                    const rematch = this.sessionManager.requestRematch(parsedSessionId, participantId);
+                    const { sessionId, participantId } = this.requireParticipation(socket.id);
+                    const rematch = this.sessionManager.requestRematch(sessionId, participantId);
                     if (rematch.status !== 'ready') {
                         return;
                     }
 
-                    const playerConnections: Array<{
-                        playerId: string;
-                        socket: Socket<ClientToServerEvents, ServerToClientEvents>;
-                    }> = [];
+                    const spectatorIds = this.getDistinctSpectatorIds(io, sessionId, rematch.players);
+                    const nextSession = this.sessionManager.createRematchSession(sessionId, spectatorIds);
                     for (const playerId of rematch.players) {
-                        const playerSocket = this.getSocketForSessionParticipant(io, playerId);
+                        const playerSocket = this.getSocketForSessionParticipant(io, sessionId, playerId);
                         if (!playerSocket) {
-                            this.sessionManager.cancelRematch(parsedSessionId);
-                            socket.emit('error', 'Your opponent is no longer available for a rematch.');
-                            return;
-                        }
-
-                        playerConnections.push({
-                            playerId,
-                            socket: playerSocket
-                        });
-                    }
-
-                    const spectatorConnections: Array<{
-                        spectatorId: string;
-                        socket: Socket<ClientToServerEvents, ServerToClientEvents>;
-                    }> = [];
-                    const spectatorIds = new Set<string>();
-                    for (const roomSocketId of io.sockets.adapter.rooms.get(parsedSessionId) ?? []) {
-                        const roomSocket = io.sockets.sockets.get(roomSocketId);
-                        if (!roomSocket) {
                             continue;
                         }
 
-                        const roomParticipantId = this.getParticipantId(roomSocket.id);
-                        if (!roomParticipantId || rematch.players.includes(roomParticipantId) || spectatorIds.has(roomParticipantId)) {
+                        this.socketParticipations.set(playerSocket.id, {
+                            sessionId: nextSession.sessionId,
+                            participantId: playerId
+                        });
+                        playerSocket.leave(sessionId);
+                        playerSocket.join(nextSession.sessionId);
+                        playerSocket.emit('session-joined', {
+                            sessionId: nextSession.sessionId,
+                            session: nextSession.session,
+                            participantId: playerId
+                        });
+                    }
+
+                    for (const spectatorId of spectatorIds) {
+                        const spectatorSocket = this.getSocketForSessionParticipant(io, sessionId, spectatorId);
+                        if (!spectatorSocket) {
                             continue;
                         }
 
-                        spectatorIds.add(roomParticipantId);
-                        spectatorConnections.push({
-                            spectatorId: roomParticipantId,
-                            socket: roomSocket
-                        });
-                    }
-
-                    const nextSession = this.sessionManager.createRematchSession(
-                        parsedSessionId,
-                        spectatorConnections.map((spectatorConnection) => spectatorConnection.spectatorId)
-                    );
-                    for (const playerConnection of playerConnections) {
-                        playerConnection.socket.emit('session-joined', {
+                        this.socketParticipations.set(spectatorSocket.id, {
                             sessionId: nextSession.sessionId,
-                            state: nextSession.state,
-                            role: 'player',
-                            players: nextSession.players,
-                            playerNames: nextSession.playerNames,
-                            lobbyOptions: nextSession.lobbyOptions,
-                            participantId: playerConnection.playerId
+                            participantId: spectatorId
                         });
-                    }
-                    for (const spectatorConnection of spectatorConnections) {
-                        spectatorConnection.socket.emit('session-joined', {
+                        spectatorSocket.leave(sessionId);
+                        spectatorSocket.join(nextSession.sessionId);
+                        spectatorSocket.emit('session-joined', {
                             sessionId: nextSession.sessionId,
-                            state: nextSession.state,
-                            role: 'spectator',
-                            players: nextSession.players,
-                            playerNames: nextSession.playerNames,
-                            lobbyOptions: nextSession.lobbyOptions,
-                            participantId: spectatorConnection.spectatorId
+                            session: nextSession.session,
+                            participantId: spectatorId
                         });
                     }
 
                     this.sessionManager.activateSession(nextSession.sessionId);
                 } catch (error: unknown) {
-                    logSocketActionFailure(this.logger, 'request-rematch', socket, error, { finishedSessionId });
+                    logSocketActionFailure(this.logger, 'request-rematch', socket, error);
                     socket.emit('error', getSocketErrorMessage(error));
                 }
             });
 
-            socket.on('cancel-rematch', (finishedSessionId: string) => {
-                let parsedSessionId: string;
+            socket.on('cancel-rematch', () => {
                 try {
-                    parsedSessionId = zSocketSessionId.parse(finishedSessionId);
-                } catch {
-                    socket.emit('error', 'Invalid session id.');
-                    return;
-                }
-
-                try {
-                    this.sessionManager.cancelRematch(parsedSessionId, participantId);
+                    const { sessionId, participantId } = this.requireParticipation(socket.id);
+                    this.sessionManager.cancelRematch(sessionId, participantId);
                 } catch (error: unknown) {
-                    logSocketActionFailure(this.logger, 'cancel-rematch', socket, error, { finishedSessionId });
+                    logSocketActionFailure(this.logger, 'cancel-rematch', socket, error);
                     socket.emit('error', getSocketErrorMessage(error));
                 }
             });
@@ -318,15 +234,10 @@ export class SocketServerGateway {
                 }
 
                 try {
-                    this.sessionManager.placeCell(
-                        parsedRequest.sessionId,
-                        participantId,
-                        parsedRequest.x,
-                        parsedRequest.y
-                    );
+                    const { sessionId, participantId } = this.requireParticipation(socket.id);
+                    this.sessionManager.placeCell(sessionId, participantId, parsedRequest.x, parsedRequest.y);
                 } catch (error: unknown) {
                     logSocketActionFailure(this.logger, 'place-cell', socket, error, {
-                        sessionId: parsedRequest.sessionId,
                         x: parsedRequest.x,
                         y: parsedRequest.y
                     });
@@ -340,22 +251,27 @@ export class SocketServerGateway {
                     socketId: socket.id
                 }, 'Socket disconnected');
 
-                this.socketParticipationId.delete(socket.id);
+                const participation = this.socketParticipations.get(socket.id);
+                this.socketParticipations.delete(socket.id);
+
+                if (!participation) {
+                    return;
+                }
 
                 const deviceId = clientInfo.deviceId;
-                if (deviceId && !this.orphanedParticipationIds.has(deviceId)) {
-                    this.orphanedParticipationIds.set(deviceId, {
+                if (deviceId && !this.orphanedParticipations.has(deviceId)) {
+                    this.orphanedParticipations.set(deviceId, {
                         deviceId,
-                        participantId,
+                        participation,
                         timeout: setTimeout(() => {
-                            this.orphanedParticipationIds.delete(deviceId);
-                            this.sessionManager.handleDisconnect(participantId, true);
+                            this.orphanedParticipations.delete(deviceId);
+                            this.sessionManager.handleDisconnect(participation.participantId, true);
                         }, 15_000)
                     });
 
-                    this.sessionManager.handleDisconnect(participantId, false);
+                    this.sessionManager.handleDisconnect(participation.participantId, false);
                 } else {
-                    this.sessionManager.handleDisconnect(participantId, true);
+                    this.sessionManager.handleDisconnect(participation.participantId, true);
                 }
             });
         });
@@ -365,31 +281,32 @@ export class SocketServerGateway {
 
     public getConnectionStatus() {
         return {
-            connectedClientCount: this.socketParticipationId.size,
-            reconnectingClientCount: this.orphanedParticipationIds.size
+            connectedClientCount: this.socketParticipations.size,
+            reconnectingClientCount: this.orphanedParticipations.size
         };
     }
 
-    private getParticipantId(socketId: string): string | undefined {
-        return this.socketParticipationId.get(socketId);
+    private getParticipation(socketId: string): Participation | undefined {
+        return this.socketParticipations.get(socketId);
     }
 
-    private requireParticipantId(socketId: string): string {
-        const participantId = this.getParticipantId(socketId);
-        if (!participantId) {
-            throw new SessionError('You are not part of this session');
+    private requireParticipation(socketId: string): Participation {
+        const participation = this.getParticipation(socketId);
+        if (!participation) {
+            throw new SessionError('You are not part of a session');
         }
 
-        return participantId;
+        return participation;
     }
 
     private getSocketForSessionParticipant(
         io: Server<ClientToServerEvents, ServerToClientEvents>,
+        sessionId: string,
         participantId: string
     ): Socket<ClientToServerEvents, ServerToClientEvents> | null {
-        for (const [socketId, socketParticipantId] of this.socketParticipationId.entries()) {
-            if (socketParticipantId !== participantId) {
-                continue
+        for (const [socketId, participation] of this.socketParticipations.entries()) {
+            if (participation.sessionId !== sessionId || participation.participantId !== participantId) {
+                continue;
             }
 
             return io.sockets.sockets.get(socketId) ?? null;
@@ -398,13 +315,45 @@ export class SocketServerGateway {
         return null;
     }
 
+    private getDistinctSpectatorIds(
+        io: Server<ClientToServerEvents, ServerToClientEvents>,
+        sessionId: string,
+        playerIds: string[]
+    ): string[] {
+        const spectatorIds = new Set<string>();
+        for (const roomSocketId of io.sockets.adapter.rooms.get(sessionId) ?? []) {
+            const roomSocket = io.sockets.sockets.get(roomSocketId);
+            if (!roomSocket) {
+                continue;
+            }
+
+            const roomParticipantId = this.getParticipation(roomSocket.id)?.participantId;
+            if (!roomParticipantId || playerIds.includes(roomParticipantId)) {
+                continue;
+            }
+
+            spectatorIds.add(roomParticipantId);
+        }
+
+        return [...spectatorIds];
+    }
+
     private async socketJoinSession(
         socket: Socket<ClientToServerEvents, ServerToClientEvents>,
-        sessionId: string
+        sessionId: string,
+        participantId: string | null,
     ): Promise<JoinSessionResult> {
-        const participantId = this.requireParticipantId(socket.id);
         const user = await this.authService.getCurrentUserFromSocket(socket)
-            ?? this.createGuestUser(socket, participantId);
+            ?? this.createGuestUser(socket);
+
+        const existingParticipation = this.socketParticipations.get(socket.id);
+        if (
+            existingParticipation
+            && this.sessionManager.getSessionInfo(existingParticipation.sessionId)
+            && !(existingParticipation.participantId === participantId && existingParticipation.sessionId === sessionId)
+        ) {
+            throw new SessionError('You are already in a session');
+        }
 
         const joinResult = this.sessionManager.joinSession({
             sessionId,
@@ -413,15 +362,16 @@ export class SocketServerGateway {
             user,
         });
 
+        this.socketParticipations.set(socket.id, {
+            sessionId,
+            participantId: joinResult.participantId
+        });
+
         socket.join(sessionId);
         socket.emit('session-joined', {
             sessionId,
-            state: joinResult.state,
-            role: joinResult.role,
-            players: joinResult.players,
-            playerNames: joinResult.playerNames,
-            lobbyOptions: joinResult.lobbyOptions,
-            participantId
+            session: joinResult.session,
+            participantId: joinResult.participantId
         });
 
         if (joinResult.gameState) {
@@ -432,14 +382,14 @@ export class SocketServerGateway {
     }
 
     private createGuestUser(
-        socket: Socket<ClientToServerEvents, ServerToClientEvents>,
-        participantId: string
+        socket: Socket<ClientToServerEvents, ServerToClientEvents>
     ) {
         const clientInfo = getSocketClientInfo(socket);
-        const fallbackSuffix = (clientInfo.deviceId ?? participantId).replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || 'PLAY';
+        const guestSeed = clientInfo.deviceId ?? randomUUID();
+        const fallbackSuffix = guestSeed.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || 'PLAY';
 
         return {
-            id: `guest:${clientInfo.deviceId ?? participantId}`,
+            id: `guest:${guestSeed}`,
             username: `Guest ${fallbackSuffix}`,
             email: null,
             image: null
@@ -447,7 +397,7 @@ export class SocketServerGateway {
     }
 
     public async shutdownConnections() {
-        this.io?.emit('error', "Server shutdown");
+        this.io?.emit('error', 'Server shutdown');
         await this.io?.close();
     }
 }

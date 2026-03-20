@@ -1,67 +1,28 @@
 import type {
-  BoardState,
-  LobbyOptions,
-  PlayerNames,
-  RematchUpdatedEvent,
+  GameBoard,
   ServerToClientEvents,
-  ShutdownState,
-  SessionFinishReason,
-  SessionParticipantRole,
-  SessionState
+  SessionInfo,
+  ShutdownState
 } from '@ih3t/shared'
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 
 type SessionJoinedPayload = Parameters<ServerToClientEvents['session-joined']>[0]
-type PlayerPresencePayload = Parameters<ServerToClientEvents['player-joined']>[0]
+type SessionUpdatedPayload = Parameters<ServerToClientEvents['session-updated']>[0]
 type GameStatePayload = Parameters<ServerToClientEvents['game-state']>[0]
-type SessionFinishedPayload = Parameters<ServerToClientEvents['session-finished']>[0]
 
-type SessionGameState =
+type ActiveGameState = {
+  gameId: string
+  gameState: GameBoard
+}
+
+type SessionScreen =
   | { kind: 'none' }
   | {
-    kind: 'waiting'
+    kind: 'session'
     sessionId: string
-    players: string[]
-    playerNames: PlayerNames
-    lobbyOptions: LobbyOptions
-    participantRole: SessionParticipantRole
-    boardState: BoardState
-  }
-  | {
-    kind: 'playing'
-    sessionId: string
-    players: string[]
-    playerNames: PlayerNames
-    lobbyOptions: LobbyOptions
-    participantRole: SessionParticipantRole
-    boardState: BoardState
-  }
-  | {
-    kind: 'finished-player'
-    sessionId: string
-    players: string[]
-    playerNames: PlayerNames
-    participantRole: 'player'
-    boardState: BoardState
-    result: 'winner' | 'loser'
-    finishReason: SessionFinishReason
-    finishedGameId: string | null
-    rematch: {
-      showAction: boolean
-      canRematch: boolean
-      requestedPlayerIds: string[]
-    }
-  }
-  | {
-    kind: 'finished-spectator'
-    sessionId: string
-    players: string[]
-    playerNames: PlayerNames
-    participantRole: 'spectator'
-    boardState: BoardState
-    finishReason: SessionFinishReason
-    finishedGameId: string | null
+    session: SessionInfo
+    game: ActiveGameState | null
   }
 
 type PendingSessionJoinState =
@@ -76,7 +37,7 @@ interface LiveGameStoreState {
     currentPlayerId: string
   }
   shutdown: ShutdownState | null
-  screen: SessionGameState
+  screen: SessionScreen
   pendingSessionJoin: PendingSessionJoinState
   setConnected: () => void
   setDisconnected: () => void
@@ -84,16 +45,12 @@ interface LiveGameStoreState {
   startJoiningSession: (sessionId: string) => void
   failJoiningSession: (sessionId: string, errorMessage: string) => void
   joinSession: (payload: SessionJoinedPayload) => void
-  updatePlayers: (payload: PlayerPresencePayload) => void
+  updateSession: (payload: SessionUpdatedPayload) => void
   updateBoard: (payload: GameStatePayload) => void
-  finishSession: (payload: SessionFinishedPayload) => void
-  updateRematch: (payload: RematchUpdatedEvent) => void
   resetToLobby: () => void
 }
 
-type ActiveSessionGameState = Exclude<SessionGameState, { kind: 'none' }>
-
-function createEmptyBoardState(): BoardState {
+function createEmptyGameBoard(): GameBoard {
   return {
     cells: [],
     currentTurnPlayerId: null,
@@ -103,61 +60,64 @@ function createEmptyBoardState(): BoardState {
   }
 }
 
-function cloneBoardState(boardState: BoardState): BoardState {
+function cloneGameBoard(gameState: GameBoard): GameBoard {
   return {
-    ...boardState,
-    cells: boardState.cells.map(cell => ({ ...cell })),
-    playerTimeRemainingMs: { ...boardState.playerTimeRemainingMs }
+    ...gameState,
+    cells: gameState.cells.map(cell => ({ ...cell })),
+    playerTimeRemainingMs: { ...gameState.playerTimeRemainingMs }
   }
 }
 
-function cloneLobbyOptions(lobbyOptions: LobbyOptions): LobbyOptions {
+function cloneSessionInfo(session: SessionInfo): SessionInfo {
+  const base = {
+    ...session,
+    players: session.players.map(player => ({ ...player })),
+    spectators: session.spectators.map(spectator => ({ ...spectator })),
+    gameOptions: {
+      ...session.gameOptions,
+      timeControl: { ...session.gameOptions.timeControl }
+    }
+  }
+
+  if (session.state === 'finished') {
+    return {
+      ...base,
+      state: 'finished',
+      gameId: session.gameId,
+      finishReason: session.finishReason,
+      winningPlayerId: session.winningPlayerId,
+      rematchAcceptedPlayerIds: [...session.rematchAcceptedPlayerIds]
+    }
+  }
+
+  if (session.state === 'in-game') {
+    return {
+      ...base,
+      state: 'in-game',
+      startedAt: session.startedAt,
+      gameId: session.gameId
+    }
+  }
+
   return {
-    ...lobbyOptions,
-    timeControl: { ...lobbyOptions.timeControl }
+    ...base,
+    state: 'lobby'
   }
 }
 
-function clonePlayerNames(playerNames: PlayerNames): PlayerNames {
-  return { ...playerNames }
-}
+function deriveGameState(session: SessionInfo): ActiveGameState | null {
+  if (session.state === 'lobby') {
+    return null
+  }
 
-function isActiveSessionGameState(screen: SessionGameState): screen is ActiveSessionGameState {
-  return screen.kind !== 'none'
-}
-
-function isFinishedScreenState(
-  screen: ActiveSessionGameState
-): screen is Extract<SessionGameState, { kind: 'finished-player' | 'finished-spectator' }> {
-  return screen.kind === 'finished-player' || screen.kind === 'finished-spectator'
-}
-
-function toPlayableSessionState(state: SessionState): 'lobby' | 'ingame' {
-  return state === 'ingame' ? 'ingame' : 'lobby'
-}
-
-function createLiveSessionScreenState(params: {
-  sessionId: string
-  sessionState: SessionState
-  participantRole: SessionParticipantRole
-  players: string[]
-  playerNames: PlayerNames
-  lobbyOptions: LobbyOptions
-  boardState: BoardState
-}): Extract<SessionGameState, { kind: 'waiting' | 'playing' }> {
   return {
-    kind: toPlayableSessionState(params.sessionState) === 'ingame' ? 'playing' : 'waiting',
-    sessionId: params.sessionId,
-    participantRole: params.participantRole,
-    players: [...params.players],
-    playerNames: clonePlayerNames(params.playerNames),
-    lobbyOptions: cloneLobbyOptions(params.lobbyOptions),
-    boardState: cloneBoardState(params.boardState)
+    gameId: session.gameId,
+    gameState: createEmptyGameBoard()
   }
 }
 
-export function getActiveSessionId(screen: SessionGameState): string | null {
-  return isActiveSessionGameState(screen) ? screen.sessionId : null
+export function getActiveSessionId(screen: SessionScreen): string | null {
+  return screen.kind === 'session' ? screen.sessionId : null
 }
 
 export const useLiveGameStore = create<LiveGameStoreState>()(
@@ -207,103 +167,47 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
       }),
     joinSession: (payload) =>
       set((state) => {
-        state.connection.currentPlayerId = payload.participantId
+        const session = cloneSessionInfo(payload.session)
         state.pendingSessionJoin = { status: 'idle', sessionId: null, errorMessage: null }
-        state.screen = createLiveSessionScreenState({
+        state.connection.currentPlayerId = payload.participantId
+        state.screen = {
+          kind: 'session',
           sessionId: payload.sessionId,
-          sessionState: payload.state,
-          participantRole: payload.role,
-          players: payload.players,
-          playerNames: payload.playerNames,
-          lobbyOptions: payload.lobbyOptions,
-          boardState: createEmptyBoardState()
-        })
+          session,
+          game: deriveGameState(session)
+        }
       }),
-    updatePlayers: (payload) =>
+    updateSession: (payload) =>
       set((state) => {
-        const currentScreen = state.screen
-        if (!isActiveSessionGameState(currentScreen) || isFinishedScreenState(currentScreen)) {
+        if (state.screen.kind !== 'session' || state.screen.sessionId !== payload.sessionId) {
           return
         }
 
-        state.screen = createLiveSessionScreenState({
-          sessionId: currentScreen.sessionId,
-          sessionState: payload.state,
-          participantRole: currentScreen.participantRole,
-          players: payload.players,
-          playerNames: payload.playerNames,
-          lobbyOptions: currentScreen.lobbyOptions,
-          boardState: currentScreen.boardState
-        })
+        const nextSession = cloneSessionInfo(payload.session)
+        state.screen.session = nextSession
+
+        if (nextSession.state === 'lobby') {
+          state.screen.game = null
+          return
+        }
+
+        if (!state.screen.game || state.screen.game.gameId !== nextSession.gameId) {
+          state.screen.game = {
+            gameId: nextSession.gameId,
+            gameState: createEmptyGameBoard()
+          }
+        }
       }),
     updateBoard: (payload) =>
       set((state) => {
-        const currentScreen = state.screen
-        if (
-          !isActiveSessionGameState(currentScreen) ||
-          isFinishedScreenState(currentScreen) ||
-          currentScreen.sessionId !== payload.sessionId
-        ) {
+        if (state.screen.kind !== 'session' || state.screen.sessionId !== payload.sessionId) {
           return
         }
 
-        state.screen = createLiveSessionScreenState({
-          sessionId: currentScreen.sessionId,
-          sessionState: payload.sessionState,
-          participantRole: currentScreen.participantRole,
-          players: currentScreen.players,
-          playerNames: currentScreen.playerNames,
-          lobbyOptions: currentScreen.lobbyOptions,
-          boardState: payload.gameState
-        })
-      }),
-    finishSession: (payload) =>
-      set((state) => {
-        const currentScreen = state.screen
-        if (!isActiveSessionGameState(currentScreen) || currentScreen.sessionId !== payload.sessionId) {
-          return
+        state.screen.game = {
+          gameId: payload.gameId,
+          gameState: cloneGameBoard(payload.gameState)
         }
-
-        if (currentScreen.participantRole === 'spectator') {
-          state.screen = {
-            kind: 'finished-spectator',
-            sessionId: currentScreen.sessionId,
-            players: [...currentScreen.players],
-            playerNames: clonePlayerNames(currentScreen.playerNames),
-            participantRole: 'spectator',
-            boardState: cloneBoardState(currentScreen.boardState),
-            finishReason: payload.reason,
-            finishedGameId: payload.finishedGameId
-          }
-          return
-        }
-
-        state.screen = {
-          kind: 'finished-player',
-          sessionId: currentScreen.sessionId,
-          players: [...currentScreen.players],
-          playerNames: clonePlayerNames(currentScreen.playerNames),
-          participantRole: 'player',
-          boardState: cloneBoardState(currentScreen.boardState),
-          result: payload.winningPlayerId === state.connection.currentPlayerId ? 'winner' : 'loser',
-          finishReason: payload.reason,
-          finishedGameId: payload.finishedGameId,
-          rematch: {
-            showAction: payload.canRematch,
-            canRematch: payload.canRematch,
-            requestedPlayerIds: []
-          }
-        }
-      }),
-    updateRematch: (payload) =>
-      set((state) => {
-        if (state.screen.kind !== 'finished-player' || state.screen.sessionId !== payload.sessionId) {
-          return
-        }
-
-        state.screen.rematch.showAction = true
-        state.screen.rematch.canRematch = payload.canRematch
-        state.screen.rematch.requestedPlayerIds = [...payload.requestedPlayerIds]
       }),
     resetToLobby: () =>
       set((state) => {

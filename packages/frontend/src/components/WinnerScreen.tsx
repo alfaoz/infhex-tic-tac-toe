@@ -1,51 +1,47 @@
 import type { MouseEvent } from 'react'
-import type { SessionFinishReason } from '@ih3t/shared'
+import type { SessionInfo } from '@ih3t/shared'
 import FinishedPlayerScreen from './FinishedPlayerScreen'
 
+type FinishedSessionInfo = Extract<SessionInfo, { state: 'finished' }>
+
 interface WinnerScreenProps {
-  reason: SessionFinishReason | null
+  session: FinishedSessionInfo
+  currentPlayerId: string
   onReturnToLobby: () => void
   reviewGameHref?: string
   onReviewGame?: (event: MouseEvent<HTMLAnchorElement>) => void
   onRequestRematch?: () => void
-  isRematchAvailable?: boolean
-  isRematchRequestedByCurrentPlayer?: boolean
-  isRematchRequestedByOpponent?: boolean
 }
 
 function WinnerScreen({
-  reason,
+  session,
+  currentPlayerId,
   onReturnToLobby,
   reviewGameHref,
   onReviewGame,
-  onRequestRematch,
-  isRematchAvailable = true,
-  isRematchRequestedByCurrentPlayer = false,
-  isRematchRequestedByOpponent = false
+  onRequestRematch
 }: Readonly<WinnerScreenProps>) {
-  const message = reason === 'timeout'
+  const message = session.finishReason === 'timeout'
     ? 'The other player failed to place a cell before the timer ran out.'
-    : reason === 'six-in-a-row'
+    : session.finishReason === 'six-in-a-row'
       ? 'You completed a six-tile row.'
-      : reason === 'surrender'
+      : session.finishReason === 'surrender'
         ? 'The other player surrendered.'
-      : reason === 'terminated'
+        : session.finishReason === 'terminated'
         ? 'The match was closed because the server shutdown reached its deadline.'
         : 'The other player disconnected.'
 
   return (
     <FinishedPlayerScreen
+      session={session}
+      currentPlayerId={currentPlayerId}
       variant="win"
       title="You've Won"
       message={message}
-      reason={reason}
       onReturnToLobby={onReturnToLobby}
       reviewGameHref={reviewGameHref}
       onReviewGame={onReviewGame}
       onRequestRematch={onRequestRematch}
-      isRematchAvailable={isRematchAvailable}
-      isRematchRequestedByCurrentPlayer={isRematchRequestedByCurrentPlayer}
-      isRematchRequestedByOpponent={isRematchRequestedByOpponent}
     />
   )
 }

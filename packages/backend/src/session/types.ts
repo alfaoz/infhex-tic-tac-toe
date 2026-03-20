@@ -1,64 +1,53 @@
+import { randomUUID } from 'node:crypto';
 import type {
-    BoardState,
+    GameBoard,
     GameMove,
-    GameSession,
     LobbyOptions,
-    PlayerNames,
-    ShutdownState,
     SessionFinishReason,
     SessionInfo,
+    SessionParticipant,
     SessionParticipantRole,
-    SessionState,
+    ShutdownState,
 } from '@ih3t/shared';
 import type { RequestClientInfo, SocketClientInfo } from '../network/clientInfo';
 import type { AccountUserProfile } from '../auth/authRepository';
 
-export interface SessionParticipantProfile {
-    userId: string;
-    username: string;
-}
-
-export interface StoredGameSession extends GameSession {
-    historyId: string;
+export interface StoredGameSession {
+    id: string;
+    players: SessionParticipant[];
+    spectators: SessionParticipant[];
+    gameOptions: LobbyOptions;
+    state: 'lobby' | 'in-game' | 'finished';
     createdAt: number;
     startedAt: number | null;
+    currentGameId: string;
     moveHistory: GameMove[];
-    participantProfiles: Record<string, SessionParticipantProfile>;
+    boardState: GameBoard;
+    finishReason: SessionFinishReason | null;
+    winningPlayerId: string | null;
+    rematchAcceptedPlayerIds: string[];
 }
 
 export type PlayerLeaveSource = 'leave-session' | 'disconnect';
 
-export interface PendingRematch {
-    finishedSessionId: string;
-    players: string[];
-    playerNames: PlayerNames;
-    participantProfiles: Record<string, SessionParticipantProfile>;
-    lobbyOptions: LobbyOptions;
-    availablePlayerIds: Set<string>;
-    requestedPlayerIds: Set<string>;
-    createdAt: number;
-}
-
 export interface PublicGameStatePayload {
     sessionId: string;
-    sessionState: SessionState;
-    gameState: BoardState;
+    gameId: string;
+    gameState: GameBoard;
 }
 
 export interface JoinSessionParams {
     sessionId: string;
-    participantId: string;
+    participantId?: string | null;
     client: SocketClientInfo;
     user: AccountUserProfile;
 }
 
 export interface JoinSessionResult {
     sessionId: string;
-    state: SessionState;
+    participantId: string;
     role: SessionParticipantRole;
-    players: string[];
-    playerNames: PlayerNames;
-    lobbyOptions: LobbyOptions;
+    session: SessionInfo;
     isNewParticipant: boolean;
     gameState?: PublicGameStatePayload;
 }
@@ -68,45 +57,32 @@ export interface CreateSessionParams {
     lobbyOptions: LobbyOptions;
 }
 
-export interface PlayerLeftEvent {
+export interface ParticipantLeftEvent {
     sessionId: string;
-    playerId: string;
-    players: string[];
-    playerNames: PlayerNames;
-    state: SessionState;
+    participantId: string;
+    participantRole: SessionParticipantRole;
+    session: SessionInfo;
 }
 
-export interface PlayerJoinedEvent {
+export interface ParticipantJoinedEvent {
     sessionId: string;
-    playerId: string;
-    players: string[];
-    playerNames: PlayerNames;
-    state: SessionState;
+    participantId: string;
+    participantRole: SessionParticipantRole;
+    session: SessionInfo;
 }
 
-export interface RematchUpdatedEvent {
+export interface SessionUpdatedEvent {
     sessionId: string;
-    playerIds: string[];
-    canRematch: boolean;
-    requestedPlayerIds: string[];
-}
-
-export interface SessionFinishedDomainEvent {
-    sessionId: string;
-    finishedGameId: string;
-    reason: SessionFinishReason;
-    winningPlayerId: string | null;
-    canRematch: boolean;
+    session: SessionInfo;
 }
 
 export interface SessionManagerEventHandlers {
     sessionsUpdated?: (sessions: SessionInfo[]) => void;
     shutdownUpdated?: (shutdown: ShutdownState | null) => void;
+    sessionUpdated?: (event: SessionUpdatedEvent) => void;
     gameStateUpdated?: (payload: PublicGameStatePayload) => void;
-    playerJoined?: (event: PlayerJoinedEvent) => void;
-    playerLeft?: (event: PlayerLeftEvent) => void;
-    rematchUpdated?: (event: RematchUpdatedEvent) => void;
-    sessionFinished?: (event: SessionFinishedDomainEvent) => void;
+    participantJoined?: (event: ParticipantJoinedEvent) => void;
+    participantLeft?: (event: ParticipantLeftEvent) => void;
 }
 
 export interface RematchRequestResult {
@@ -116,8 +92,64 @@ export interface RematchRequestResult {
 
 export interface RematchSessionResult {
     sessionId: string;
-    state: SessionState;
-    players: string[];
-    playerNames: PlayerNames;
-    lobbyOptions: LobbyOptions;
+    session: SessionInfo;
+}
+
+export function cloneGameOptions(gameOptions: LobbyOptions): LobbyOptions {
+    return {
+        ...gameOptions,
+        timeControl: { ...gameOptions.timeControl }
+    };
+}
+
+export function cloneSessionParticipant(participant: SessionParticipant): SessionParticipant {
+    return { ...participant };
+}
+
+export function cloneParticipants(participants: SessionParticipant[]): SessionParticipant[] {
+    return participants.map((participant) => cloneSessionParticipant(participant));
+}
+
+export function cloneGameBoard(boardState: GameBoard): GameBoard {
+    return {
+        ...boardState,
+        cells: boardState.cells.map((cell) => ({ ...cell })),
+        playerTimeRemainingMs: { ...boardState.playerTimeRemainingMs }
+    };
+}
+
+export function createStoredGameSession(
+    sessionId: string,
+    gameOptions: LobbyOptions,
+    createdAt = Date.now()
+): StoredGameSession {
+    return {
+        id: sessionId,
+        players: [],
+        spectators: [],
+        gameOptions: cloneGameOptions(gameOptions),
+        state: 'lobby',
+        createdAt,
+        startedAt: null,
+        currentGameId: randomUUID(),
+        moveHistory: [],
+        boardState: {
+            cells: [],
+            currentTurnPlayerId: null,
+            placementsRemaining: 0,
+            currentTurnExpiresAt: null,
+            playerTimeRemainingMs: {}
+        },
+        finishReason: null,
+        winningPlayerId: null,
+        rematchAcceptedPlayerIds: []
+    };
+}
+
+export function buildSessionParticipant(participantId: string, user: AccountUserProfile): SessionParticipant {
+    return {
+        id: participantId,
+        displayName: user.username,
+        profileId: user.id.startsWith('guest:') ? null : user.id
+    };
 }

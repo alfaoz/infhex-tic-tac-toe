@@ -14,12 +14,23 @@ export const queryKeys = {
 }
 
 export function sortLobbySessions(sessions: SessionInfo[]) {
-  return [...sessions].sort((leftSession, rightSession) => {
-    if (leftSession.canJoin !== rightSession.canJoin) {
-      return leftSession.canJoin ? -1 : 1
+  const getSortTimestamp = (session: SessionInfo) => {
+    if (session.state === 'in-game') {
+      return session.startedAt
     }
 
-    return rightSession.createdAt - leftSession.createdAt
+    return 0
+  }
+
+  return [...sessions].sort((leftSession, rightSession) => {
+    const leftCanJoin = leftSession.state === 'lobby' && leftSession.players.length < 2
+    const rightCanJoin = rightSession.state === 'lobby' && rightSession.players.length < 2
+
+    if (leftCanJoin !== rightCanJoin) {
+      return leftCanJoin ? -1 : 1
+    }
+
+    return getSortTimestamp(rightSession) - getSortTimestamp(leftSession)
   })
 }
 

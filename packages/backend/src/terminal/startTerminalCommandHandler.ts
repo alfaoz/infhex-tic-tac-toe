@@ -91,7 +91,7 @@ function logRuntimeStatus(
     const now = Date.now();
     const sessions = sessionManager.getTerminalSessionStatuses(now);
     const connectionStatus = socketServerGateway.getConnectionStatus();
-    const liveGameCount = sessions.filter((session) => session.state === 'ingame').length;
+    const liveGameCount = sessions.filter((session) => session.state === 'in-game').length;
     const waitingSessionCount = sessions.filter((session) => session.state === 'lobby').length;
     const reconnectingSuffix = connectionStatus.reconnectingClientCount > 0
         ? `, ${connectionStatus.reconnectingClientCount} reconnecting`
@@ -139,7 +139,7 @@ function compareTerminalSessions(a: TerminalSessionStatus, b: TerminalSessionSta
 
 function sessionStateOrder(state: TerminalSessionStatus['state']): number {
     switch (state) {
-        case 'ingame':
+        case 'in-game':
             return 0;
         case 'lobby':
             return 1;
@@ -154,7 +154,7 @@ function formatTerminalSessionStatus(session: TerminalSessionStatus): string {
     const participants = `${session.playerCount} player${session.playerCount === 1 ? '' : 's'}, ${session.spectatorCount} spectator${session.spectatorCount === 1 ? '' : 's'}`;
     const moveText = `move ${session.moveCount}`;
 
-    if (session.state === 'ingame') {
+    if (session.state === 'in-game') {
         return `Session ${session.sessionId}: in game for ${formatDuration(session.gameDurationMs ?? 0)}, currently at ${moveText}, ${participants}, current turn ${session.currentTurnPlayerId ?? 'n/a'} (${session.placementsRemaining} placement${session.placementsRemaining === 1 ? '' : 's'} remaining)`;
     }
 

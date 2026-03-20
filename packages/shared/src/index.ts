@@ -6,7 +6,7 @@ const zTimestamp = z.number().int();
 const zCoordinate = z.number().int();
 const zIdentifier = z.string();
 
-export const zSessionState = z.enum(['lobby', 'ingame', 'finished']);
+export const zSessionState = z.enum(['lobby', 'in-game', 'finished']);
 export type SessionState = z.infer<typeof zSessionState>;
 
 export const zSessionParticipantRole = z.enum(['player', 'spectator']);
@@ -70,26 +70,24 @@ export const zBoardCell = z.object({
 });
 export type BoardCell = z.infer<typeof zBoardCell>;
 
-export const zBoardState = z.object({
+export const zGameBoard = z.object({
     cells: z.array(zBoardCell),
     currentTurnPlayerId: zIdentifier.nullable(),
     placementsRemaining: z.number().int().nonnegative(),
     currentTurnExpiresAt: zTimestamp.nullable(),
     playerTimeRemainingMs: z.record(z.string(), z.number().int().nonnegative())
 });
-export type BoardState = z.infer<typeof zBoardState>;
+export type GameBoard = z.infer<typeof zGameBoard>;
 
-export const zGameSession = z.object({
+export const zBoardState = zGameBoard;
+export type BoardState = GameBoard;
+
+export const zSessionParticipant = z.object({
     id: zIdentifier,
-    players: z.array(zIdentifier),
-    playerNames: zPlayerNames,
-    spectators: z.array(zIdentifier),
-    maxPlayers: z.literal(2),
-    state: zSessionState,
-    lobbyOptions: zLobbyOptions,
-    gameState: zBoardState
+    displayName: z.string(),
+    profileId: zIdentifier.nullable()
 });
-export type GameSession = z.infer<typeof zGameSession>;
+export type SessionParticipant = z.infer<typeof zSessionParticipant>;
 
 export const zCreateSessionRequest = z.object({
     lobbyOptions: zLobbyOptions.optional()
@@ -107,17 +105,30 @@ export const zJoinSessionRequest = z.object({
 });
 export type JoinSessionRequest = z.infer<typeof zJoinSessionRequest>;
 
-export const zSessionInfo = z.object({
+const zSessionInfoBase = z.object({
     id: zIdentifier,
-    playerCount: z.number().int().nonnegative(),
-    playerNames: z.array(z.string()),
-    maxPlayers: z.literal(2),
-    state: zSessionState,
-    lobbyOptions: zLobbyOptions,
-    canJoin: z.boolean(),
-    createdAt: zTimestamp,
-    startedAt: zTimestamp.nullable()
+    players: z.array(zSessionParticipant),
+    spectators: z.array(zSessionParticipant),
+    gameOptions: zLobbyOptions
 });
+
+export const zSessionInfo = z.discriminatedUnion('state', [
+    zSessionInfoBase.extend({
+        state: z.literal('lobby')
+    }),
+    zSessionInfoBase.extend({
+        state: z.literal('in-game'),
+        startedAt: zTimestamp,
+        gameId: zIdentifier
+    }),
+    zSessionInfoBase.extend({
+        state: z.literal('finished'),
+        gameId: zIdentifier,
+        finishReason: zSessionFinishReason,
+        winningPlayerId: zIdentifier.nullable(),
+        rematchAcceptedPlayerIds: z.array(zIdentifier)
+    })
+]);
 export type SessionInfo = z.infer<typeof zSessionInfo>;
 
 export const zGameMove = z.object({
@@ -166,50 +177,35 @@ export const zFinishedGamesPage = z.object({
 });
 export type FinishedGamesPage = z.infer<typeof zFinishedGamesPage>;
 
-export const zSessionFinishedEvent = z.object({
-    sessionId: zIdentifier,
-    finishedGameId: zIdentifier,
-    winningPlayerId: zIdentifier.nullable(),
-    reason: zSessionFinishReason,
-    canRematch: z.boolean()
-});
-export type SessionFinishedEvent = z.infer<typeof zSessionFinishedEvent>;
-
-export const zRematchUpdatedEvent = z.object({
-    sessionId: zIdentifier,
-    canRematch: z.boolean(),
-    requestedPlayerIds: z.array(zIdentifier)
-});
-export type RematchUpdatedEvent = z.infer<typeof zRematchUpdatedEvent>;
-
 export const zSessionJoinedEvent = z.object({
     sessionId: zIdentifier,
-    state: zSessionState,
-    role: zSessionParticipantRole,
-    players: z.array(zIdentifier),
-    playerNames: zPlayerNames,
-    lobbyOptions: zLobbyOptions,
+    session: zSessionInfo,
     participantId: zIdentifier
 });
 export type SessionJoinedEvent = z.infer<typeof zSessionJoinedEvent>;
 
-export const zSessionPlayersUpdatedEvent = z.object({
-    playerId: zIdentifier,
-    players: z.array(zIdentifier),
-    playerNames: zPlayerNames,
-    state: zSessionState
+export const zSessionUpdatedEvent = z.object({
+    sessionId: zIdentifier,
+    session: zSessionInfo
 });
-export type SessionPlayersUpdatedEvent = z.infer<typeof zSessionPlayersUpdatedEvent>;
+export type SessionUpdatedEvent = z.infer<typeof zSessionUpdatedEvent>;
+
+export const zParticipantUpdatedEvent = z.object({
+    sessionId: zIdentifier,
+    participantId: zIdentifier,
+    participantRole: zSessionParticipantRole,
+    session: zSessionInfo
+});
+export type ParticipantUpdatedEvent = z.infer<typeof zParticipantUpdatedEvent>;
 
 export const zGameStateEvent = z.object({
     sessionId: zIdentifier,
-    sessionState: zSessionState,
-    gameState: zBoardState
+    gameId: zIdentifier,
+    gameState: zGameBoard
 });
 export type GameStateEvent = z.infer<typeof zGameStateEvent>;
 
 export const zPlaceCellRequest = z.object({
-    sessionId: z.string().trim().min(1),
     x: zCoordinate,
     y: zCoordinate
 });
@@ -219,11 +215,10 @@ export const zServerToClientEvents = z.custom<{
     'sessions-updated': (sessions: SessionInfo[]) => void;
     'shutdown-updated': (shutdown: ShutdownState | null) => void;
     'session-joined': (data: SessionJoinedEvent) => void;
-    'session-finished': (data: SessionFinishedEvent) => void;
-    'player-joined': (data: SessionPlayersUpdatedEvent) => void;
-    'player-left': (data: SessionPlayersUpdatedEvent) => void;
+    'session-updated': (data: SessionUpdatedEvent) => void;
+    'participant-joined': (data: ParticipantUpdatedEvent) => void;
+    'participant-left': (data: ParticipantUpdatedEvent) => void;
     'game-state': (data: GameStateEvent) => void;
-    'rematch-updated': (data: RematchUpdatedEvent) => void;
     error: (error: string) => void;
 }>();
 export type ServerToClientEvents = z.infer<typeof zServerToClientEvents>;

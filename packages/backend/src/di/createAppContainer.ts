@@ -12,7 +12,6 @@ import { GameHistoryRepository } from '../persistence/gameHistoryRepository';
 import { MongoDatabase } from '../persistence/mongoClient';
 import { MetricsRepository } from '../persistence/metricsRepository';
 import { SessionManager } from '../session/sessionManager';
-import { SessionStore } from '../session/sessionStore';
 import { GameSimulation } from '../simulation/gameSimulation';
 import { ApplicationServer } from '../serverRuntime';
 
@@ -25,7 +24,6 @@ export function createAppContainer(): DependencyContainer {
         level: serverConfig.logLevel,
         pretty: serverConfig.prettyLogs
     }));
-    appContainer.registerSingleton(SessionStore);
     appContainer.registerSingleton(GameSimulation);
     appContainer.registerSingleton(MongoDatabase);
     appContainer.registerSingleton(AuthRepository);

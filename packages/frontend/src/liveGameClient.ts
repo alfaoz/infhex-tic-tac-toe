@@ -61,26 +61,20 @@ export function startLiveGameClient() {
     showErrorToast('Disconnected from the server.')
   })
 
-  socket.on('player-joined', data => {
-    useLiveGameStore.getState().updatePlayers(data)
-  })
-
   socket.on('session-joined', data => {
     useLiveGameStore.getState().joinSession(data)
   })
 
-  socket.on('player-left', data => {
-    useLiveGameStore.getState().updatePlayers(data)
-  })
-
-  socket.on('session-finished', data => {
+  socket.on('session-updated', data => {
     const currentState = useLiveGameStore.getState()
     if (getActiveSessionId(currentState.screen) !== data.sessionId) {
       return
     }
 
-    currentState.finishSession(data)
-    void queryClient.invalidateQueries({ queryKey: queryKeys.finishedGames })
+    currentState.updateSession(data)
+    if (data.session.state === 'finished') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.finishedGames })
+    }
   })
 
   socket.on('game-state', data => {
@@ -92,13 +86,18 @@ export function startLiveGameClient() {
     currentState.updateBoard(data)
   })
 
-  socket.on('rematch-updated', data => {
-    const currentState = useLiveGameStore.getState()
-    if (getActiveSessionId(currentState.screen) !== data.sessionId) {
-      return
-    }
+  socket.on('participant-joined', data => {
+    useLiveGameStore.getState().updateSession({
+      sessionId: data.sessionId,
+      session: data.session
+    })
+  })
 
-    currentState.updateRematch(data)
+  socket.on('participant-left', data => {
+    useLiveGameStore.getState().updateSession({
+      sessionId: data.sessionId,
+      session: data.session
+    })
   })
 
   socket.on('error', (error: string) => {

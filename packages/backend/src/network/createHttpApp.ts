@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { GameTimeControl } from '@ih3t/shared';
+import type { GameTimeControl, SessionParticipant } from '@ih3t/shared';
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
 import { z } from 'zod';
@@ -116,14 +116,14 @@ function formatTimeControl(timeControl: GameTimeControl): string {
     return `${formatSeconds(Math.round(timeControl.mainTimeMs / 1000))} +${formatSeconds(Math.round(timeControl.incrementMs / 1000))} clock based`;
 }
 
-function getNormalizedPlayerNames(playerNames: string[]): string[] {
-    return playerNames
-        .map((playerName) => playerName.trim())
+function getNormalizedPlayerNames(players: SessionParticipant[]): string[] {
+    return players
+        .map((player) => player.displayName.trim())
         .filter((playerName) => playerName.length > 0);
 }
 
-function describePlayersWaiting(playerNames: string[], visibility: string): string {
-    const [firstPlayerName] = getNormalizedPlayerNames(playerNames);
+function describePlayersWaiting(players: SessionParticipant[], visibility: string): string {
+    const [firstPlayerName] = getNormalizedPlayerNames(players);
     if (firstPlayerName) {
         return `${firstPlayerName} is waiting for you in a ${visibility} lobby`;
     }
@@ -131,8 +131,8 @@ function describePlayersWaiting(playerNames: string[], visibility: string): stri
     return `A ${visibility} lobby is waiting for you`;
 }
 
-function describePlayersInMatch(playerNames: string[], visibility: string): string {
-    const normalizedPlayerNames = getNormalizedPlayerNames(playerNames);
+function describePlayersInMatch(players: SessionParticipant[], visibility: string): string {
+    const normalizedPlayerNames = getNormalizedPlayerNames(players);
     if (normalizedPlayerNames.length === 1) {
         return `${normalizedPlayerNames[0]} is already playing in a ${visibility} Infinity Hexagonial Tic-Tac-Toe match`;
     }
@@ -331,14 +331,15 @@ export class HttpApplication {
                 };
             }
 
+            const canJoin = canJoinSession(inviteSession);
             return {
                 ...defaultMetadata,
-                title: inviteSession.canJoin
+                title: canJoin
                     ? `Join Lobby ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`
                     : `Spectate Match ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`,
-                description: inviteSession.canJoin
-                    ? `${describePlayersWaiting(inviteSession.playerNames, inviteSession.lobbyOptions.visibility)} with ${formatTimeControl(inviteSession.lobbyOptions.timeControl)} time control. Click to join the match.`
-                    : `${describePlayersInMatch(inviteSession.playerNames, inviteSession.lobbyOptions.visibility)} with ${formatTimeControl(inviteSession.lobbyOptions.timeControl)} time control. Open to spectate it live.`,
+                description: canJoin
+                    ? `${describePlayersWaiting(inviteSession.players, inviteSession.gameOptions.visibility)} with ${formatTimeControl(inviteSession.gameOptions.timeControl)} time control. Click to join the match.`
+                    : `${describePlayersInMatch(inviteSession.players, inviteSession.gameOptions.visibility)} with ${formatTimeControl(inviteSession.gameOptions.timeControl)} time control. Open to spectate it live.`,
                 robots: 'noindex, nofollow'
             };
         }
@@ -365,4 +366,7 @@ export class HttpApplication {
                 return 'after the match ended';
         }
     }
+}
+function canJoinSession(session: { state: string; players: SessionParticipant[] }): boolean {
+    return session.state === 'lobby' && session.players.length < 2;
 }

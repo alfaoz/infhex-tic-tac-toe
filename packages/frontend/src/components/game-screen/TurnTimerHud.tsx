@@ -1,56 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GameTimeControl, PlayerNames } from '@ih3t/shared'
-import { useLiveGameStore } from '../../liveGameStore'
+import type { GameBoard, LobbyOptions, SessionParticipant } from '@ih3t/shared'
 import { playCountdownWarningSound } from '../../soundEffects'
 import { formatCountdown, getPlayerColor, getPlayerLabel } from './gameBoardUtils'
 
 interface TurnTimerHudProps {
-  effectiveTimeControl: GameTimeControl
-  players: string[]
-  playerNames: PlayerNames
-  currentTurnPlayerId: string | null
+  gameOptions: LobbyOptions
+  players: SessionParticipant[]
+  gameState: GameBoard
   localPlayerId: string | null
 }
 
-const EMPTY_PLAYER_CLOCKS: Record<string, number> = {}
-
 function TurnTimerHud({
-  effectiveTimeControl,
+  gameOptions,
   players,
-  playerNames,
-  currentTurnPlayerId,
+  gameState,
   localPlayerId
 }: Readonly<TurnTimerHudProps>) {
   const [activeClockCountdownMs, setActiveClockCountdownMs] = useState<number | null>(null)
   const lastCountdownWarningSecondRef = useRef<number | null>(null)
-  const currentTurnExpiresAt = useLiveGameStore((state) => {
-    if (state.screen.kind !== 'playing' && state.screen.kind !== 'waiting') {
-      return null
-    }
-
-    return state.screen.boardState.currentTurnExpiresAt
-  })
-  const placementsRemaining = useLiveGameStore((state) => {
-    if (state.screen.kind !== 'playing' && state.screen.kind !== 'waiting') {
-      return 0
-    }
-
-    return state.screen.boardState.placementsRemaining
-  })
-  const playerTimeRemainingMs = useLiveGameStore((state) => {
-    if (state.screen.kind !== 'playing' && state.screen.kind !== 'waiting') {
-      return EMPTY_PLAYER_CLOCKS
-    }
-
-    return state.screen.boardState.playerTimeRemainingMs
-  })
+  const effectiveTimeControl = gameOptions.timeControl
+  const playerIds = players.map(player => player.id)
+  const playerNames = Object.fromEntries(players.map(player => [player.id, player.displayName]))
+  const currentTurnPlayerId = gameState.currentTurnPlayerId
+  const currentTurnExpiresAt = gameState.currentTurnExpiresAt
+  const placementsRemaining = gameState.placementsRemaining
+  const playerTimeRemainingMs = gameState.playerTimeRemainingMs
 
   const isSpectator = localPlayerId === null
   const canPlaceCell = localPlayerId !== null && currentTurnPlayerId === localPlayerId
-  const firstPlayerId = players[0]!
-  const secondPlayerId = players[1]!
+  const firstPlayerId = playerIds[0]!
+  const secondPlayerId = playerIds[1]!
   const playerSlots = [firstPlayerId, secondPlayerId] as const
-  const activePlayerColor = currentTurnPlayerId ? getPlayerColor(players, currentTurnPlayerId) : '#7dd3fc'
+  const activePlayerColor = currentTurnPlayerId ? getPlayerColor(playerIds, currentTurnPlayerId) : '#7dd3fc'
   const spectatorAccentTextStyle = isSpectator ? { color: activePlayerColor } : undefined
   const spectatorAccentDotStyle = isSpectator ? { backgroundColor: activePlayerColor } : undefined
 
@@ -62,7 +43,7 @@ function TurnTimerHud({
 
   const spectatorTurnDetail = !currentTurnPlayerId
     ? 'Waiting for the next player to move.'
-    : `${getPlayerLabel(players, currentTurnPlayerId, playerNames)} to move.`
+    : `${getPlayerLabel(playerIds, currentTurnPlayerId, playerNames)} to move.`
 
   const turnDetail = isSpectator
     ? spectatorTurnDetail
@@ -207,10 +188,10 @@ function TurnTimerHud({
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span
                           className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: getPlayerColor(players, playerId) }}
+                          style={{ backgroundColor: getPlayerColor(playerIds, playerId) }}
                         />
                         <span className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 sm:text-[11px]">
-                          {getPlayerLabel(players, playerId, playerNames)}
+                          {getPlayerLabel(playerIds, playerId, playerNames)}
                         </span>
                         {isLocalPlayer && !isSpectator && (
                           <div className="rounded bg-white/10 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-200 sm:text-[9px]">

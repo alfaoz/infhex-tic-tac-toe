@@ -15,18 +15,25 @@ import {
     type CreateGameHistoryPayload,
 } from '../persistence/gameHistoryRepository';
 import { GameSimulation, SimulationError } from '../simulation/gameSimulation';
-import { createStoredGameSession, SessionStore } from './sessionStore';
 import type {
     CreateSessionParams,
     JoinSessionParams,
     JoinSessionResult,
-    PendingRematch,
+    ParticipantJoinedEvent,
+    ParticipantLeftEvent,
     PlayerLeaveSource,
     RematchRequestResult,
     RematchSessionResult,
-    SessionFinishedDomainEvent,
     SessionManagerEventHandlers,
+    SessionUpdatedEvent,
     StoredGameSession,
+} from './types';
+import {
+    buildSessionParticipant,
+    cloneGameBoard,
+    cloneGameOptions,
+    cloneParticipants,
+    createStoredGameSession,
 } from './types';
 
 export class SessionError extends Error {
@@ -38,7 +45,7 @@ export class SessionError extends Error {
 
 export interface TerminalSessionStatus {
     sessionId: string;
-    state: 'lobby' | 'ingame' | 'finished';
+    state: 'lobby' | 'in-game' | 'finished';
     playerCount: number;
     spectatorCount: number;
     moveCount: number;
@@ -51,12 +58,14 @@ export interface TerminalSessionStatus {
 }
 
 const DEFAULT_SHUTDOWN_DELAY_MS = 10 * 60 * 1000;
+const MAX_PLAYERS_PER_SESSION = 2;
 type ShutdownTrigger = 'all-sessions-finished' | 'deadline-reached';
 
 @injectable()
 export class SessionManager {
     private eventHandlers: SessionManagerEventHandlers = {};
     private readonly logger: Logger;
+    private readonly sessions = new Map<string, StoredGameSession>();
     private scheduledShutdown: ShutdownState | null = null;
     private scheduledShutdownTimer: ReturnType<typeof setTimeout> | null = null;
     private shutdownRequested = false;
@@ -64,7 +73,6 @@ export class SessionManager {
 
     constructor(
         @inject(ROOT_LOGGER) rootLogger: Logger,
-        @inject(SessionStore) private readonly store: SessionStore,
         @inject(GameSimulation) private readonly simulation: GameSimulation,
         @inject(GameHistoryRepository) private readonly gameHistoryRepository: GameHistoryRepository,
         @inject(BackgroundWorkerHub) private readonly backgroundWorkers: BackgroundWorkerHub
@@ -81,15 +89,24 @@ export class SessionManager {
     }
 
     listSessions(): SessionInfo[] {
-        return this.store.listSessionInfos();
+        return this.listStoredSessions()
+            .filter((session) => {
+                if (session.state === 'finished') {
+                    return false;
+                }
+
+                return session.state !== 'lobby' || session.gameOptions.visibility === 'public';
+            })
+            .map((session) => this.toSessionInfo(session));
     }
 
     getSessionInfo(sessionId: string): SessionInfo | null {
-        return this.store.getSessionInfo(sessionId);
+        const session = this.sessions.get(sessionId);
+        return session ? this.toSessionInfo(session) : null;
     }
 
     getTerminalSessionStatuses(now = Date.now()): TerminalSessionStatus[] {
-        return this.store.listSessions().map((session) => ({
+        return this.listStoredSessions().map((session) => ({
             sessionId: session.id,
             state: session.state,
             playerCount: session.players.length,
@@ -99,8 +116,8 @@ export class SessionManager {
             startedAt: session.startedAt,
             gameDurationMs: session.startedAt === null ? null : Math.max(0, now - session.startedAt),
             totalLifetimeMs: Math.max(0, now - session.createdAt),
-            currentTurnPlayerId: session.gameState.currentTurnPlayerId,
-            placementsRemaining: session.gameState.placementsRemaining
+            currentTurnPlayerId: session.boardState.currentTurnPlayerId,
+            placementsRemaining: session.boardState.placementsRemaining
         }));
     }
 
@@ -129,19 +146,15 @@ export class SessionManager {
             this.handleScheduledShutdownDeadline();
         }, delayMs);
 
-        for (const rematch of this.store.listPendingRematches()) {
-            this.cancelPendingRematch(rematch.finishedSessionId);
-        }
-
         this.emitShutdownUpdated();
         this.logger.info({
             event: 'shutdown.scheduled',
             scheduledAt,
             shutdownAt: this.scheduledShutdown.shutdownAt,
-            activeSessionCount: this.store.listSessions().length
+            activeSessionCount: this.sessions.size
         }, 'Scheduled server shutdown');
 
-        if (this.store.listSessions().length === 0) {
+        if (this.sessions.size === 0) {
             setTimeout(() => {
                 this.requestApplicationShutdown('all-sessions-finished');
             }, 0);
@@ -158,7 +171,7 @@ export class SessionManager {
         const sessionId = this.createSessionId();
         const session = createStoredGameSession(sessionId, params.lobbyOptions);
 
-        this.store.saveSession(session);
+        this.sessions.set(session.id, session);
         this.emitSessionsUpdated();
         void this.gameHistoryRepository.createHistory(this.getCreateHistoryPayload(session));
 
@@ -173,73 +186,76 @@ export class SessionManager {
 
     joinSession(params: JoinSessionParams): JoinSessionResult {
         const session = this.requireSession(params.sessionId);
-        session.participantProfiles[params.participantId] = {
-            userId: params.user.id,
-            username: params.user.username
-        };
-        const existingRole = this.getExistingParticipantRole(session, params.participantId);
-        if (existingRole) {
-            return {
-                sessionId: session.id,
-                state: session.state,
-                role: existingRole,
-                players: [...session.players],
-                playerNames: this.buildPlayerNames(session),
-                lobbyOptions: { ...session.lobbyOptions },
-                isNewParticipant: false,
-                gameState: session.state === 'ingame' ? this.simulation.getPublicGameState(session) : undefined
-            };
+
+        if (params.participantId) {
+            const existingRole = this.getExistingParticipantRole(session, params.participantId);
+            if (existingRole) {
+                this.refreshParticipant(session, params.participantId, params.user);
+                const sessionInfo = this.toSessionInfo(session);
+                return {
+                    sessionId: session.id,
+                    participantId: params.participantId,
+                    role: existingRole,
+                    session: sessionInfo,
+                    isNewParticipant: false,
+                    gameState: session.state !== 'lobby'
+                        ? this.simulation.getPublicGameState(session)
+                        : undefined
+                };
+            }
         }
 
-        let role: JoinSessionResult['role'];
-        if (session.state === 'lobby') {
-            if (session.players.length >= session.maxPlayers) {
-                throw new SessionError('Session is full');
-            }
-
-            session.players.push(params.participantId);
-            session.playerNames[params.participantId] = params.user.username;
-            role = 'player';
-        } else if (session.state === 'ingame') {
-            session.spectators.push(params.participantId);
-            role = 'spectator';
-        } else {
+        if (session.state === 'finished') {
             throw new SessionError('Session has already finished');
         }
 
+        const participantId = params.participantId ?? this.createParticipantId(session);
+        const participant = buildSessionParticipant(participantId, params.user);
+
+        let role: JoinSessionResult['role'];
+        if (session.state === 'lobby') {
+            if (session.players.length >= MAX_PLAYERS_PER_SESSION) {
+                throw new SessionError('Session is full');
+            }
+
+            session.players.push(participant);
+            role = 'player';
+        } else {
+            session.spectators.push(participant);
+            role = 'spectator';
+        }
+
+        const sessionInfo = this.toSessionInfo(session);
         this.emitSessionsUpdated();
+        this.emitSessionUpdated(session);
         this.backgroundWorkers.track(role === 'player' ? 'game-joined' : 'spectator-joined', {
             sessionId: session.id,
-            [`${role}Id`]: params.participantId,
-            players: [...session.players],
-            spectators: [...session.spectators],
+            [`${role}Id`]: participant.id,
+            players: session.players.map(({ id }) => id),
+            spectators: session.spectators.map(({ id }) => id),
             client: params.client
         });
 
-        if (role === 'player') {
-            this.eventHandlers.playerJoined?.({
-                sessionId: session.id,
-                playerId: params.participantId,
-                players: [...session.players],
-                playerNames: this.buildPlayerNames(session),
-                state: session.state
-            });
-        }
+        const event: ParticipantJoinedEvent = {
+            sessionId: session.id,
+            participantId: participant.id,
+            participantRole: role,
+            session: sessionInfo
+        };
+        this.eventHandlers.participantJoined?.(event);
 
         return {
             sessionId: session.id,
-            state: session.state,
+            participantId: participant.id,
             role,
-            players: [...session.players],
-            playerNames: this.buildPlayerNames(session),
-            lobbyOptions: { ...session.lobbyOptions },
+            session: sessionInfo,
             isNewParticipant: true,
             gameState: role === 'spectator' ? this.simulation.getPublicGameState(session) : undefined
         };
     }
 
     activateSession(sessionId: string): void {
-        const session = this.store.getSession(sessionId);
+        const session = this.sessions.get(sessionId);
         if (!session) {
             return;
         }
@@ -248,50 +264,47 @@ export class SessionManager {
     }
 
     leaveSession(sessionId: string, participantId: string, source: PlayerLeaveSource): void {
-        const session = this.store.getSession(sessionId);
+        const session = this.sessions.get(sessionId);
         if (!session) {
             return;
         }
 
-        if (session.players.includes(participantId)) {
+        if (session.players.some((participant) => participant.id === participantId)) {
             this.removePlayerFromSession(session, participantId, source);
             return;
         }
 
-        if (session.spectators.includes(participantId)) {
+        if (session.spectators.some((participant) => participant.id === participantId)) {
             this.removeSpectatorFromSession(session, participantId, source);
         }
     }
 
     surrenderSession(sessionId: string, participantId: string): void {
         const session = this.requireSession(sessionId);
-        if (session.state !== 'ingame') {
+        if (session.state !== 'in-game') {
             throw new SessionError('Game is not currently active');
         }
 
-        if (!session.players.includes(participantId)) {
+        if (!session.players.some((participant) => participant.id === participantId)) {
             throw new SessionError('Only active players can surrender');
         }
 
-        const winningPlayerId = session.players.find((playerId) => playerId !== participantId) ?? null;
+        const winningPlayerId = session.players.find((player) => player.id !== participantId)?.id ?? null;
         this.finishSession(session, 'surrender', winningPlayerId);
     }
 
     handleDisconnect(participantId: string, terminal: boolean): void {
-        this.removePendingRematchesForPlayer(participantId);
-
-        for (const session of this.store.findSessionsByParticipant(participantId)) {
-            if (session.state === "ingame" && !terminal) {
-                /* player may reconnect */
-                continue
+        for (const session of this.findSessionsByParticipant(participantId)) {
+            if (session.state === 'in-game' && !terminal) {
+                continue;
             }
 
-            if (session.players.includes(participantId)) {
+            if (session.players.some((participant) => participant.id === participantId)) {
                 this.removePlayerFromSession(session, participantId, 'disconnect');
                 continue;
             }
 
-            if (session.spectators.includes(participantId)) {
+            if (session.spectators.some((participant) => participant.id === participantId)) {
                 this.removeSpectatorFromSession(session, participantId, 'disconnect');
             }
         }
@@ -299,11 +312,11 @@ export class SessionManager {
 
     placeCell(sessionId: string, participantId: string, x: number, y: number): void {
         const session = this.requireSession(sessionId);
-        if (session.state !== 'ingame') {
+        if (session.state !== 'in-game') {
             throw new SessionError('Game is not currently active');
         }
 
-        if (!session.players.includes(participantId)) {
+        if (!session.players.some((participant) => participant.id === participantId)) {
             throw new SessionError('You are not part of this session');
         }
 
@@ -322,7 +335,7 @@ export class SessionManager {
             throw error;
         }
 
-        void this.gameHistoryRepository.appendMove(session.historyId, moveResult.move);
+        void this.gameHistoryRepository.appendMove(session.currentGameId, moveResult.move);
 
         if (moveResult.winningPlayerId) {
             this.emitGameState(session);
@@ -334,26 +347,32 @@ export class SessionManager {
         this.emitGameState(session);
     }
 
-    requestRematch(finishedSessionId: string, participantId: string): RematchRequestResult {
+    requestRematch(sessionId: string, participantId: string): RematchRequestResult {
         if (this.scheduledShutdown) {
             throw new SessionError('Server shutdown is scheduled. Rematches are unavailable.');
         }
 
-        const rematch = this.store.getPendingRematch(finishedSessionId);
-        if (!rematch || !rematch.players.includes(participantId)) {
+        const session = this.requireSession(sessionId);
+        if (session.state !== 'finished') {
             throw new SessionError('Rematch is not available for this match.');
         }
 
-        if (rematch.availablePlayerIds.size !== rematch.players.length || !rematch.availablePlayerIds.has(participantId)) {
+        if (!session.players.some((player) => player.id === participantId)) {
+            throw new SessionError('Rematch is not available for this match.');
+        }
+
+        if (session.players.length !== MAX_PLAYERS_PER_SESSION) {
             throw new SessionError('Your opponent is no longer available for a rematch.');
         }
 
-        rematch.requestedPlayerIds.add(participantId);
-        this.emitRematchUpdated(rematch);
+        if (!session.rematchAcceptedPlayerIds.includes(participantId)) {
+            session.rematchAcceptedPlayerIds = [...session.rematchAcceptedPlayerIds, participantId];
+        }
+        this.emitSessionUpdated(session);
 
         return {
-            status: rematch.requestedPlayerIds.size === rematch.players.length ? 'ready' : 'pending',
-            players: [...rematch.players]
+            status: session.rematchAcceptedPlayerIds.length === session.players.length ? 'ready' : 'pending',
+            players: session.players.map(({ id }) => id)
         };
     }
 
@@ -362,74 +381,70 @@ export class SessionManager {
             throw new SessionError('Server shutdown is scheduled. Rematches are unavailable.');
         }
 
-        const rematch = this.store.getPendingRematch(finishedSessionId);
-        if (!rematch) {
+        const session = this.requireSession(finishedSessionId);
+        if (session.state !== 'finished') {
             throw new SessionError('Rematch is not available for this match.');
         }
 
-        if (rematch.requestedPlayerIds.size < rematch.players.length) {
+        if (session.rematchAcceptedPlayerIds.length < session.players.length) {
             throw new SessionError('Waiting for both players to request the rematch.');
         }
 
-        this.store.deletePendingRematch(finishedSessionId);
+        const nextSession = createStoredGameSession(finishedSessionId, session.gameOptions);
+        nextSession.players = cloneParticipants(session.players).reverse();
+        nextSession.spectators = session.spectators
+            .filter((spectator) => spectatorIds.includes(spectator.id))
+            .map((spectator) => ({ ...spectator }));
 
-        const nextSession = createStoredGameSession(finishedSessionId, rematch.lobbyOptions);
-        nextSession.players = [...rematch.players];
-        nextSession.playerNames = { ...rematch.playerNames };
-        nextSession.participantProfiles = { ...rematch.participantProfiles };
-        nextSession.spectators = Array.from(new Set(
-            spectatorIds.filter((spectatorId) => !rematch.players.includes(spectatorId))
-        ));
-
-        /* reverse the player order to effectively "switch sides" on re-match */
-        nextSession.players.reverse();
-
-        this.store.saveSession(nextSession);
+        this.sessions.delete(session.id);
+        this.sessions.set(nextSession.id, nextSession);
         this.emitSessionsUpdated();
         void this.gameHistoryRepository.createHistory(this.getCreateHistoryPayload(nextSession));
 
         return {
             sessionId: nextSession.id,
-            state: nextSession.state,
-            players: [...nextSession.players],
-            playerNames: this.buildPlayerNames(nextSession),
-            lobbyOptions: { ...nextSession.lobbyOptions }
+            session: this.toSessionInfo(nextSession)
         };
     }
 
-    cancelRematch(finishedSessionId: string, participantId?: string): void {
-        this.cancelPendingRematch(finishedSessionId, participantId);
-    }
-
-    expireStaleRematches(maxAgeMs: number): void {
-        if (maxAgeMs <= 0) {
+    cancelRematch(sessionId: string, participantId?: string): void {
+        const session = this.sessions.get(sessionId);
+        if (!session || session.state !== 'finished') {
             return;
         }
 
-        const threshold = Date.now() - maxAgeMs;
-        for (const rematch of this.store.listPendingRematches()) {
-            if (rematch.createdAt > threshold) {
-                continue;
+        if (participantId) {
+            if (!session.rematchAcceptedPlayerIds.includes(participantId)) {
+                return;
             }
 
-            this.cancelPendingRematch(rematch.finishedSessionId);
+            session.rematchAcceptedPlayerIds = [];
+            this.emitSessionUpdated(session);
+            return;
         }
+
+        session.rematchAcceptedPlayerIds = [];
+        this.emitSessionUpdated(session);
+    }
+
+    expireStaleRematches(_maxAgeMs: number): void {
+        /* rematches now live on the finished session itself */
     }
 
     private readonly handleTurnExpired = (sessionId: string): void => {
-        const session = this.store.getSession(sessionId);
-        if (!session || session.state !== 'ingame' || session.players.length < 2) {
+        const session = this.sessions.get(sessionId);
+        if (!session || session.state !== 'in-game' || session.players.length < MAX_PLAYERS_PER_SESSION) {
             this.simulation.clearSession(sessionId);
             return;
         }
 
-        const timedOutPlayerId = session.gameState.currentTurnPlayerId;
+        const timedOutPlayerId = session.boardState.currentTurnPlayerId;
         if (!timedOutPlayerId) {
             this.simulation.clearSession(sessionId);
             return;
         }
 
-        const winningPlayerId = session.players.find((playerId) => playerId !== timedOutPlayerId) ?? null;
+        const winningPlayerId = session.players.find((player) => player.id !== timedOutPlayerId)?.id ?? null;
         this.finishSession(session, 'timeout', winningPlayerId);
     };
 
@@ -443,10 +458,10 @@ export class SessionManager {
         this.logger.info({
             event: 'shutdown.deadline-reached',
             shutdownAt: shutdown.shutdownAt,
-            activeSessionCount: this.store.listSessions().length
+            activeSessionCount: this.sessions.size
         }, 'Shutdown deadline reached; closing remaining sessions');
 
-        for (const session of [...this.store.listSessions()]) {
+        for (const session of [...this.listStoredSessions()]) {
             this.finishSession(session, 'terminated', null);
         }
 
@@ -458,68 +473,57 @@ export class SessionManager {
             this.logger.info({
                 event: 'session.terminated-empty',
                 sessionId: session.id
-            }, 'Terminating empty session');
-            this.finishSession(session, 'terminated', null);
+            }, 'Removing empty session');
+            this.simulation.clearSession(session.id);
+            this.sessions.delete(session.id);
+            this.emitSessionsUpdated();
             return;
         }
 
-        if (session.state !== 'lobby' || session.players.length < session.maxPlayers) {
+        if (session.state !== 'lobby' || session.players.length < MAX_PLAYERS_PER_SESSION) {
             return;
         }
 
-        session.state = 'ingame';
+        session.state = 'in-game';
         session.startedAt = Date.now();
+        session.finishReason = null;
+        session.winningPlayerId = null;
+        session.rematchAcceptedPlayerIds = [];
         this.simulation.startSession(session, this.handleTurnExpired, session.startedAt);
         void this.gameHistoryRepository.markStarted(
-            session.historyId,
-            session.players,
+            session.currentGameId,
+            session.players.map(({ id }) => id),
             this.buildPlayerNames(session),
             this.buildPlayerProfileIds(session)
         );
 
         this.emitGameState(session);
         this.emitSessionsUpdated();
+        this.emitSessionUpdated(session);
         this.logger.info({
             event: 'session.started',
             sessionId: session.id,
-            players: [...session.players],
+            players: session.players.map(({ id }) => id),
             startedAt: session.startedAt
         }, 'Session started');
     }
 
     private finishSession(session: StoredGameSession, reason: SessionFinishReason, winningPlayerId: string | null): void {
-        const finishedAt = Date.now();
-        const finalBoardState = this.simulation.getPublicGameState(session).gameState;
-        const gameDurationMs = session.startedAt === null ? null : finishedAt - session.startedAt;
-        const canRematch = winningPlayerId !== null && session.players.length === session.maxPlayers && !this.scheduledShutdown;
-
-        if (session.state !== 'finished') {
-            session.state = 'finished';
-            if (canRematch) {
-                this.store.savePendingRematch({
-                    finishedSessionId: session.id,
-                    players: [...session.players],
-                    playerNames: this.buildPlayerNames(session),
-                    participantProfiles: { ...session.participantProfiles },
-                    lobbyOptions: { ...session.lobbyOptions },
-                    availablePlayerIds: new Set<string>(session.players),
-                    requestedPlayerIds: new Set<string>(),
-                    createdAt: finishedAt
-                });
-            }
-
-            const event: SessionFinishedDomainEvent = {
-                sessionId: session.id,
-                finishedGameId: session.historyId,
-                reason,
-                winningPlayerId,
-                canRematch
-            };
-            this.eventHandlers.sessionFinished?.(event);
+        if (session.state === 'finished') {
+            return;
         }
 
+        const finishedAt = Date.now();
+        session.state = 'finished';
+        session.boardState = cloneGameBoard(this.simulation.getPublicGameState(session).gameState);
+        session.finishReason = reason;
+        session.winningPlayerId = winningPlayerId;
+        session.rematchAcceptedPlayerIds = [];
+
+        const gameDurationMs = session.startedAt === null ? null : finishedAt - session.startedAt;
+
         void this.gameHistoryRepository.finalizeHistory({
-            id: session.historyId,
+            id: session.currentGameId,
             startedAt: session.startedAt,
             winningPlayerId,
             reason,
@@ -529,9 +533,9 @@ export class SessionManager {
             sessionId: session.id,
             reason,
             winningPlayerId,
-            players: [...session.players],
-            spectators: [...session.spectators],
-            boardState: finalBoardState,
+            players: session.players.map(({ id }) => id),
+            spectators: session.spectators.map(({ id }) => id),
+            boardState: session.boardState,
             createdAt: new Date(session.createdAt).toISOString(),
             startedAt: session.startedAt === null ? null : new Date(session.startedAt).toISOString(),
             finishedAt: new Date(finishedAt).toISOString(),
@@ -540,95 +544,84 @@ export class SessionManager {
         });
 
         this.simulation.clearSession(session.id);
-        this.store.deleteSession(session.id);
         this.emitSessionsUpdated();
+        this.emitSessionUpdated(session);
         this.maybeShutdownAfterSessionFinished();
         this.logger.info({
             event: 'session.finished',
             sessionId: session.id,
             reason,
             winningPlayerId,
-            players: [...session.players],
+            players: session.players.map(({ id }) => id),
             finishedAt
         }, 'Session finished');
     }
 
     private removePlayerFromSession(session: StoredGameSession, participantId: string, source: PlayerLeaveSource): void {
-        session.players = session.players.filter((playerId) => playerId !== participantId);
+        session.players = session.players.filter((player) => player.id !== participantId);
 
         this.backgroundWorkers.track('game-left', {
             sessionId: session.id,
             playerId: participantId,
             source,
             sessionState: session.state,
-            remainingPlayers: [...session.players]
+            remainingPlayers: session.players.map(({ id }) => id)
         });
 
-        if (session.state === 'ingame') {
-            const [winningPlayerId] = session.players;
-            this.finishSession(session, 'disconnect', winningPlayerId ?? null);
+        if (session.state === 'in-game') {
+            const winningPlayerId = session.players[0]?.id ?? null;
+            this.finishSession(session, 'disconnect', winningPlayerId);
             return;
         }
 
-        this.eventHandlers.playerLeft?.({
+        session.rematchAcceptedPlayerIds = [];
+        const sessionInfo = this.toSessionInfo(session);
+        const event: ParticipantLeftEvent = {
             sessionId: session.id,
-            playerId: participantId,
-            players: [...session.players],
-            playerNames: this.buildPlayerNames(session),
-            state: session.state
-        });
+            participantId,
+            participantRole: 'player',
+            session: sessionInfo
+        };
+        this.eventHandlers.participantLeft?.(event);
+
+        if (session.players.length === 0 && session.spectators.length === 0) {
+            this.sessions.delete(session.id);
+        }
+
         this.emitSessionsUpdated();
+        if (this.sessions.has(session.id)) {
+            this.emitSessionUpdated(session);
+        }
         this.reconcileLobbyState(session);
     }
 
     private removeSpectatorFromSession(session: StoredGameSession, participantId: string, source: PlayerLeaveSource): void {
-        session.spectators = session.spectators.filter((spectatorId) => spectatorId !== participantId);
+        session.spectators = session.spectators.filter((spectator) => spectator.id !== participantId);
 
         this.backgroundWorkers.track('spectator-left', {
             sessionId: session.id,
             spectatorId: participantId,
             source,
             sessionState: session.state,
-            remainingSpectators: [...session.spectators]
+            remainingSpectators: session.spectators.map(({ id }) => id)
         });
-    }
 
-    private removePendingRematchesForPlayer(participantId: string): void {
-        for (const rematch of this.store.listPendingRematches()) {
-            if (!rematch.players.includes(participantId)) {
-                continue;
-            }
+        const sessionInfo = this.toSessionInfo(session);
+        const event: ParticipantLeftEvent = {
+            sessionId: session.id,
+            participantId,
+            participantRole: 'spectator',
+            session: sessionInfo
+        };
+        this.eventHandlers.participantLeft?.(event);
 
-            rematch.availablePlayerIds.delete(participantId);
-            rematch.requestedPlayerIds.clear();
-            this.emitRematchUpdated(rematch);
-            this.store.deletePendingRematch(rematch.finishedSessionId);
-        }
-    }
-
-    private cancelPendingRematch(finishedSessionId: string, participantId?: string): void {
-        const rematch = this.store.getPendingRematch(finishedSessionId);
-        if (!rematch) {
+        if (session.players.length === 0 && session.spectators.length === 0) {
+            this.sessions.delete(session.id);
+            this.emitSessionsUpdated();
             return;
         }
 
-        if (participantId) {
-            const wasAvailable = rematch.availablePlayerIds.delete(participantId);
-            rematch.requestedPlayerIds.delete(participantId);
-            if (!wasAvailable) {
-                return;
-            }
-
-            rematch.requestedPlayerIds.clear();
-            this.emitRematchUpdated(rematch);
-            this.store.deletePendingRematch(finishedSessionId);
-            return;
-        }
-
-        rematch.availablePlayerIds.clear();
-        rematch.requestedPlayerIds.clear();
-        this.emitRematchUpdated(rematch);
-        this.store.deletePendingRematch(finishedSessionId);
+        this.emitSessionUpdated(session);
     }
 
     private emitSessionsUpdated(): void {
@@ -639,21 +632,20 @@ export class SessionManager {
         this.eventHandlers.shutdownUpdated?.(this.getShutdownState());
     }
 
+    private emitSessionUpdated(session: StoredGameSession): void {
+        const event: SessionUpdatedEvent = {
+            sessionId: session.id,
+            session: this.toSessionInfo(session)
+        };
+        this.eventHandlers.sessionUpdated?.(event);
+    }
+
     private emitGameState(session: StoredGameSession): void {
         this.eventHandlers.gameStateUpdated?.(this.simulation.getPublicGameState(session));
     }
 
-    private emitRematchUpdated(rematch: PendingRematch): void {
-        this.eventHandlers.rematchUpdated?.({
-            sessionId: rematch.finishedSessionId,
-            playerIds: [...rematch.players],
-            canRematch: rematch.availablePlayerIds.size === rematch.players.length,
-            requestedPlayerIds: [...rematch.requestedPlayerIds]
-        });
-    }
-
     private requireSession(sessionId: string): StoredGameSession {
-        const session = this.store.getSession(sessionId);
+        const session = this.sessions.get(sessionId);
         if (!session) {
             throw new SessionError('Session not found');
         }
@@ -662,33 +654,88 @@ export class SessionManager {
     }
 
     private getExistingParticipantRole(session: StoredGameSession, participantId: string): JoinSessionResult['role'] | null {
-        if (session.players.includes(participantId)) {
+        if (session.players.some((participant) => participant.id === participantId)) {
             return 'player';
         }
 
-        if (session.spectators.includes(participantId)) {
+        if (session.spectators.some((participant) => participant.id === participantId)) {
             return 'spectator';
         }
 
         return null;
     }
 
+    private refreshParticipant(session: StoredGameSession, participantId: string, user: JoinSessionParams['user']): void {
+        const nextParticipant = buildSessionParticipant(participantId, user);
+        session.players = session.players.map((participant) =>
+            participant.id === participantId ? nextParticipant : participant
+        );
+        session.spectators = session.spectators.map((participant) =>
+            participant.id === participantId ? nextParticipant : participant
+        );
+    }
+
     private createSessionId(): string {
         let sessionId = Math.random().toString(36).substring(2, 8);
-        while (this.store.getSession(sessionId)) {
+        while (this.sessions.has(sessionId)) {
             sessionId = Math.random().toString(36).substring(2, 8);
         }
 
         return sessionId;
     }
 
+    private createParticipantId(session: StoredGameSession): string {
+        let participantId = Math.random().toString(36).substring(2, 8);
+        while (
+            session.players.some((participant) => participant.id === participantId)
+            || session.spectators.some((participant) => participant.id === participantId)
+        ) {
+            participantId = Math.random().toString(36).substring(2, 8);
+        }
+
+        return participantId;
+    }
+
+    private toSessionInfo(session: StoredGameSession): SessionInfo {
+        const base = {
+            id: session.id,
+            players: cloneParticipants(session.players),
+            spectators: cloneParticipants(session.spectators),
+            gameOptions: cloneGameOptions(session.gameOptions),
+        };
+
+        switch (session.state) {
+            case 'lobby':
+                return {
+                    ...base,
+                    state: 'lobby'
+                };
+
+            case 'in-game':
+                return {
+                    ...base,
+                    state: 'in-game',
+                    startedAt: session.startedAt ?? session.createdAt,
+                    gameId: session.currentGameId
+                };
+
+            case 'finished':
+                return {
+                    ...base,
+                    state: 'finished',
+                    gameId: session.currentGameId,
+                    finishReason: session.finishReason ?? 'terminated',
+                    winningPlayerId: session.winningPlayerId,
+                    rematchAcceptedPlayerIds: [...session.rematchAcceptedPlayerIds]
+                };
+        }
+    }
+
     private buildPlayerNames(session: StoredGameSession): PlayerNames {
         const playerNames: PlayerNames = {};
 
-        for (const [playerIndex, playerId] of session.players.entries()) {
-            playerNames[playerId] = session.participantProfiles[playerId]?.username
-                ?? session.playerNames[playerId]
-                ?? `Player ${playerIndex + 1}`;
+        for (const [playerIndex, player] of session.players.entries()) {
+            playerNames[player.id] = player.displayName || `Player ${playerIndex + 1}`;
         }
 
         return playerNames;
@@ -697,9 +744,8 @@ export class SessionManager {
     private buildPlayerProfileIds(session: StoredGameSession): PlayerProfileIds {
         const playerProfileIds: PlayerProfileIds = {};
 
-        for (const playerId of session.players) {
-            const userId = session.participantProfiles[playerId]?.userId ?? null;
-            playerProfileIds[playerId] = userId?.startsWith('guest:') ? null : userId;
+        for (const player of session.players) {
+            playerProfileIds[player.id] = player.profileId;
         }
 
         return playerProfileIds;
@@ -707,14 +753,14 @@ export class SessionManager {
 
     private getCreateHistoryPayload(session: StoredGameSession): CreateGameHistoryPayload {
         return {
-            id: session.historyId,
+            id: session.currentGameId,
             sessionId: session.id,
             createdAt: session.createdAt
         };
     }
 
     private maybeShutdownAfterSessionFinished(): void {
-        if (!this.scheduledShutdown || this.shutdownRequested || this.store.listSessions().length > 0) {
+        if (!this.scheduledShutdown || this.shutdownRequested || this.listStoredSessions().some((session) => session.state !== 'finished')) {
             return;
         }
 
@@ -744,5 +790,16 @@ export class SessionManager {
 
         clearTimeout(this.scheduledShutdownTimer);
         this.scheduledShutdownTimer = null;
+    }
+
+    private listStoredSessions(): StoredGameSession[] {
+        return Array.from(this.sessions.values());
+    }
+
+    private findSessionsByParticipant(participantId: string): StoredGameSession[] {
+        return this.listStoredSessions().filter((session) =>
+            session.players.some((participant) => participant.id === participantId)
+            || session.spectators.some((participant) => participant.id === participantId)
+        );
     }
 }

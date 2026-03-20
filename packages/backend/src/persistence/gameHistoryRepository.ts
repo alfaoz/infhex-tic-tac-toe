@@ -44,7 +44,7 @@ export interface FinishedGameHistoryPayload extends StartedGameHistoryPayload {
 const zGameHistoryDocument = z.object({
     id: z.string(),
     sessionId: z.string(),
-    state: z.enum(['lobby', 'ingame', 'finished']),
+    state: z.enum(['lobby', 'in-game', 'finished']),
     players: z.array(z.string()),
     playerNames: zPlayerNames.optional(),
     playerProfileIds: zPlayerProfileIds.optional(),
@@ -113,7 +113,7 @@ export class GameHistoryRepository {
                 { id: id },
                 {
                     $set: {
-                        state: 'ingame',
+                        state: 'in-game',
                         players: players,
                         playerNames: { ...playerNames },
                         playerProfileIds: { ...playerProfileIds },

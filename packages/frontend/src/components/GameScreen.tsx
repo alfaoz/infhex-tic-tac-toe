@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BoardState, GameTimeControl, PlayerNames, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
+import type { GameBoard, LobbyOptions, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
 import { playTilePlacedSound } from '../soundEffects'
 import GameBoardCanvas from './game-screen/GameBoardCanvas'
 import GameScreenHud, { HudPlayerInfo } from './game-screen/GameScreenHud'
@@ -10,12 +10,12 @@ import useGameBoard from './game-screen/useGameBoard'
 
 interface GameScreenProps {
   sessionId: string
-  players: string[]
-  playerNames: PlayerNames
+  gameId: string
+  players: SessionParticipant[]
+  gameOptions: LobbyOptions
   participantRole: SessionParticipantRole
   currentPlayerId: string
-  boardState: BoardState
-  timeControl?: GameTimeControl
+  gameState: GameBoard
   shutdown: ShutdownState | null
   onPlaceCell: (x: number, y: number) => void
   onLeave: () => void
@@ -30,12 +30,12 @@ function mergeCellKeys(existingKeys: string[], addedKeys: string[]) {
 
 function GameScreen({
   sessionId,
+  gameId,
   players,
-  playerNames,
+  gameOptions,
   participantRole,
   currentPlayerId,
-  boardState,
-  timeControl,
+  gameState,
   shutdown,
   onPlaceCell,
   onLeave,
@@ -44,37 +44,38 @@ function GameScreen({
   interactionEnabled = true
 }: Readonly<GameScreenProps>) {
   const [highlightedCellKeys, setHighlightedCellKeys] = useState<string[]>([])
-  const previousBoardStateRef = useRef<BoardState | null>(null)
-  const previousCellCountRef = useRef(boardState.cells.length)
+  const previousBoardStateRef = useRef<GameBoard | null>(null)
+  const previousCellCountRef = useRef(gameState.cells.length)
   const ongoingHighlightedTurnKeysRef = useRef<string[]>([])
   const ongoingHighlightedTurnPlayerIdRef = useRef<string | null>(null)
   const lastHighlightedTurnKeysRef = useRef<string[]>([])
 
-  const effectiveTimeControl: GameTimeControl = timeControl ?? { mode: 'unlimited' }
+  const playerIds = players.map(player => player.id)
+  const playerNames = Object.fromEntries(players.map(player => [player.id, player.displayName]))
   const isSpectator = participantRole === 'spectator'
-  const isOwnTurn = Boolean(currentPlayerId) && boardState.currentTurnPlayerId === currentPlayerId
+  const isOwnTurn = Boolean(currentPlayerId) && gameState.currentTurnPlayerId === currentPlayerId
   const canPlaceCell = interactionEnabled && !isSpectator && isOwnTurn
 
   const hudPlayerInfo = useMemo(() => {
-    return players.map(playerId => ({
+    return playerIds.map(playerId => ({
       playerId,
-      displayName: getPlayerLabel(players, playerId, playerNames),
-      displayColor: getPlayerColor(players, playerId)
+      displayName: getPlayerLabel(playerIds, playerId, playerNames),
+      displayColor: getPlayerColor(playerIds, playerId)
     } satisfies HudPlayerInfo))
-  }, [players, currentPlayerId, playerNames]);
+  }, [playerIds, playerNames]);
 
   useEffect(() => {
     previousBoardStateRef.current = null
-    previousCellCountRef.current = boardState.cells.length
+    previousCellCountRef.current = gameState.cells.length
     ongoingHighlightedTurnKeysRef.current = []
     ongoingHighlightedTurnPlayerIdRef.current = null
     lastHighlightedTurnKeysRef.current = []
     setHighlightedCellKeys([])
-  }, [currentPlayerId, participantRole])
+  }, [currentPlayerId, participantRole, gameId])
 
   useEffect(() => {
     if (!interactionEnabled || (!isSpectator && !currentPlayerId)) {
-      previousBoardStateRef.current = boardState
+      previousBoardStateRef.current = gameState
       ongoingHighlightedTurnKeysRef.current = []
       ongoingHighlightedTurnPlayerIdRef.current = null
       lastHighlightedTurnKeysRef.current = []
@@ -83,8 +84,8 @@ function GameScreen({
     }
 
     const previousBoardState = previousBoardStateRef.current
-    if (!previousBoardState || boardState.cells.length < previousBoardState.cells.length) {
-      previousBoardStateRef.current = boardState
+    if (!previousBoardState || gameState.cells.length < previousBoardState.cells.length) {
+      previousBoardStateRef.current = gameState
       ongoingHighlightedTurnKeysRef.current = []
       ongoingHighlightedTurnPlayerIdRef.current = null
       lastHighlightedTurnKeysRef.current = []
@@ -101,7 +102,7 @@ function GameScreen({
     }
 
     const previousCellKeys = new Set(previousBoardState.cells.map(cell => getCellKey(cell.x, cell.y)))
-    const addedHighlightedTurnCells = boardState.cells.reduce<BoardState['cells']>((addedCells, cell) => {
+    const addedHighlightedTurnCells = gameState.cells.reduce<GameBoard['cells']>((addedCells, cell) => {
       const cellKey = getCellKey(cell.x, cell.y)
       if (!previousCellKeys.has(cellKey) && (isSpectator || cell.occupiedBy !== currentPlayerId)) {
         addedCells.push(cell)
@@ -126,8 +127,8 @@ function GameScreen({
       )
     }
 
-    const currentHighlightedTurnPlayerId = isTrackedTurnPlayer(boardState.currentTurnPlayerId)
-      ? boardState.currentTurnPlayerId
+    const currentHighlightedTurnPlayerId = isTrackedTurnPlayer(gameState.currentTurnPlayerId)
+      ? gameState.currentTurnPlayerId
       : null
 
     if (
@@ -147,8 +148,8 @@ function GameScreen({
       setHighlightedCellKeys(lastHighlightedTurnKeysRef.current)
     }
 
-    previousBoardStateRef.current = boardState
-  }, [boardState, currentPlayerId, interactionEnabled, isSpectator])
+    previousBoardStateRef.current = gameState
+  }, [gameState, currentPlayerId, interactionEnabled, isSpectator])
 
   const {
     canvasRef,
@@ -157,8 +158,8 @@ function GameScreen({
     renderableCellCount,
     resetView
   } = useGameBoard({
-    boardState,
-    players,
+    boardState: gameState,
+    players: playerIds,
     interactionEnabled,
     canPlaceCell,
     isOwnTurn,
@@ -169,12 +170,12 @@ function GameScreen({
 
   useEffect(() => {
     const previousCellCount = previousCellCountRef.current
-    if (interactionEnabled && boardState.cells.length > previousCellCount) {
+    if (interactionEnabled && gameState.cells.length > previousCellCount) {
       playTilePlacedSound()
     }
 
-    previousCellCountRef.current = boardState.cells.length
-  }, [boardState.cells.length, interactionEnabled])
+    previousCellCountRef.current = gameState.cells.length
+  }, [gameState.cells.length, interactionEnabled])
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-slate-950 text-white">
@@ -188,10 +189,9 @@ function GameScreen({
         <div className="flex h-full flex-col justify-between gap-4">
           {interactionEnabled && (
             <TurnTimerHud
-              effectiveTimeControl={effectiveTimeControl}
+              gameOptions={gameOptions}
               players={players}
-              playerNames={playerNames}
-              currentTurnPlayerId={boardState.currentTurnPlayerId}
+              gameState={gameState}
               localPlayerId={isSpectator ? null : currentPlayerId}
             />
           )}
@@ -202,7 +202,7 @@ function GameScreen({
               players={hudPlayerInfo}
               localPlayerId={currentPlayerId}
 
-              occupiedCellCount={boardState.cells.length}
+              occupiedCellCount={gameState.cells.length}
               renderableCellCount={renderableCellCount}
 
               shutdown={shutdown}

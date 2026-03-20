@@ -1,36 +1,38 @@
 import type { MouseEvent } from 'react'
-import type { SessionFinishReason } from '@ih3t/shared'
+import type { SessionInfo } from '@ih3t/shared'
 
 type FinishedPlayerScreenVariant = 'win' | 'lose'
+type FinishedSessionInfo = Extract<SessionInfo, { state: 'finished' }>
 
 interface FinishedPlayerScreenProps {
+  session: FinishedSessionInfo
+  currentPlayerId: string
   variant: FinishedPlayerScreenVariant
   title: string
   message: string
-  reason: SessionFinishReason | null
   onReturnToLobby: () => void
   reviewGameHref?: string
   onReviewGame?: (event: MouseEvent<HTMLAnchorElement>) => void
   onRequestRematch?: () => void
-  isRematchAvailable?: boolean
-  isRematchRequestedByCurrentPlayer?: boolean
-  isRematchRequestedByOpponent?: boolean
 }
 
 function FinishedPlayerScreen({
+  session,
+  currentPlayerId,
   variant,
   title,
   message,
-  reason,
   onReturnToLobby,
   reviewGameHref,
   onReviewGame,
-  onRequestRematch,
-  isRematchAvailable = true,
-  isRematchRequestedByCurrentPlayer = false,
-  isRematchRequestedByOpponent = false
+  onRequestRematch
 }: Readonly<FinishedPlayerScreenProps>) {
   const isWin = variant === 'win'
+  const isRematchAvailable = session.players.length === 2 && session.winningPlayerId !== null
+  const isRematchRequestedByCurrentPlayer = session.rematchAcceptedPlayerIds.includes(currentPlayerId)
+  const isRematchRequestedByOpponent = session.rematchAcceptedPlayerIds.some(
+    (playerId) => playerId !== currentPlayerId
+  )
   const rematchLabel = !isRematchAvailable
     ? 'Opponent Left'
     : isRematchRequestedByCurrentPlayer

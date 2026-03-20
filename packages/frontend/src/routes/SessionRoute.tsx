@@ -2,6 +2,7 @@ import type { MouseEvent } from 'react'
 import { useEffect, useRef } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router'
 import { toast } from 'react-toastify'
+import type { PlayerNames, SessionParticipant, SessionParticipantRole } from '@ih3t/shared'
 import GameScreen from '../components/GameScreen'
 import LoserScreen from '../components/LoserScreen'
 import SpectatorFinishedScreen from '../components/SpectatorFinishedScreen'
@@ -37,6 +38,18 @@ function showSuccessToast(message: string) {
   toast.success(message, {
     toastId: `success:${message}`
   })
+}
+
+function getPlayerIds(players: SessionParticipant[]) {
+  return players.map(player => player.id)
+}
+
+function getPlayerNames(players: SessionParticipant[]): PlayerNames {
+  return Object.fromEntries(players.map(player => [player.id, player.displayName]))
+}
+
+function getParticipantRole(players: SessionParticipant[], currentPlayerId: string): SessionParticipantRole {
+  return players.some(player => player.id === currentPlayerId) ? 'player' : 'spectator'
 }
 
 function SessionConnectingScreen({ sessionId, isConnected, onBack }: Readonly<{
@@ -267,109 +280,137 @@ function SessionRoute() {
     )
   }
 
-  if (liveScreen.kind === 'waiting') {
+  if (liveScreen.kind === 'session' && liveScreen.session.state === 'lobby') {
+    const playerIds = getPlayerIds(liveScreen.session.players)
+    const playerNames = getPlayerNames(liveScreen.session.players)
     return (
       <WaitingScreen
         sessionId={liveScreen.sessionId}
-        playerCount={liveScreen.players.length}
-        playerNames={liveScreen.playerNames}
-        lobbyOptions={liveScreen.lobbyOptions}
+        playerCount={playerIds.length}
+        playerNames={playerNames}
+        lobbyOptions={liveScreen.session.gameOptions}
         onInviteFriend={() => void inviteFriend()}
         onCancel={leaveSessionToLobby}
       />
     )
   }
 
-  if (liveScreen.kind === 'playing') {
+  if (liveScreen.kind === 'session' && liveScreen.session.state === 'in-game') {
+    const game = liveScreen.game
+    if (!game) {
+      return (
+        <SessionConnectingScreen
+          sessionId={sessionId}
+          isConnected={connection.isConnected}
+          onBack={returnToLobbyAndNavigate}
+        />
+      )
+    }
+
+    const participantRole = getParticipantRole(liveScreen.session.players, connection.currentPlayerId)
     return (
       <GameScreen
         sessionId={liveScreen.sessionId}
-        players={liveScreen.players}
-        playerNames={liveScreen.playerNames}
-        participantRole={liveScreen.participantRole}
+        gameId={game.gameId}
+        players={liveScreen.session.players}
+        gameOptions={liveScreen.session.gameOptions}
+        participantRole={participantRole}
         currentPlayerId={connection.currentPlayerId}
-        boardState={liveScreen.boardState}
-        timeControl={liveScreen.lobbyOptions.timeControl}
+        gameState={game.gameState}
         shutdown={shutdown}
         onPlaceCell={placeCell}
-        onLeave={liveScreen.participantRole === 'player' ? surrenderGame : leaveSessionToLobby}
-        leaveLabel={liveScreen.participantRole === 'player' ? 'Surrender' : 'Leave Game'}
+        onLeave={participantRole === 'player' ? surrenderGame : leaveSessionToLobby}
+        leaveLabel={participantRole === 'player' ? 'Surrender' : 'Leave Game'}
       />
     )
   }
 
-  if (liveScreen.kind === 'finished-player') {
-    const finishedGameId = liveScreen.finishedGameId
+  if (liveScreen.kind === 'session' && liveScreen.session.state === 'finished') {
+    const game = liveScreen.game
+    if (!game) {
+      return (
+        <SessionConnectingScreen
+          sessionId={sessionId}
+          isConnected={connection.isConnected}
+          onBack={returnToLobbyAndNavigate}
+        />
+      )
+    }
+
+    const participantRole = getParticipantRole(liveScreen.session.players, connection.currentPlayerId)
+    const finishedGameId = liveScreen.session.gameId
     const reviewGameHref = finishedGameId ? buildFinishedGamePath(finishedGameId, 1, Date.now()) : undefined
-    const isRematchRequestedByCurrentPlayer = liveScreen.rematch.requestedPlayerIds.includes(connection.currentPlayerId)
-    const isRematchRequestedByOpponent = liveScreen.rematch.requestedPlayerIds.some(
-      playerId => playerId !== connection.currentPlayerId
-    )
+
+    if (participantRole === 'player') {
+      const result = liveScreen.session.winningPlayerId === connection.currentPlayerId ? 'winner' : 'loser'
+      return (
+        <GameScreen
+          sessionId={liveScreen.sessionId}
+          gameId={game.gameId}
+          players={liveScreen.session.players}
+          gameOptions={liveScreen.session.gameOptions}
+          participantRole={participantRole}
+          currentPlayerId={connection.currentPlayerId}
+          gameState={game.gameState}
+          shutdown={shutdown}
+          onPlaceCell={() => { }}
+          onLeave={leaveSessionToLobby}
+          interactionEnabled={false}
+          overlay={result === 'winner'
+            ? (
+              <WinnerScreen
+                session={liveScreen.session}
+                currentPlayerId={connection.currentPlayerId}
+                onReturnToLobby={returnToLobbyAndNavigate}
+                reviewGameHref={reviewGameHref}
+                onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}
+                onRequestRematch={requestRematch}
+              />
+            )
+            : (
+              <LoserScreen
+                session={liveScreen.session}
+                currentPlayerId={connection.currentPlayerId}
+                onReturnToLobby={returnToLobbyAndNavigate}
+                reviewGameHref={reviewGameHref}
+                onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}
+                onRequestRematch={requestRematch}
+              />
+            )}
+        />
+      )
+    }
 
     return (
       <GameScreen
         sessionId={liveScreen.sessionId}
-        players={liveScreen.players}
-        playerNames={liveScreen.playerNames}
-        participantRole={liveScreen.participantRole}
+        gameId={game.gameId}
+        players={liveScreen.session.players}
+        gameOptions={liveScreen.session.gameOptions}
+        participantRole={participantRole}
         currentPlayerId={connection.currentPlayerId}
-        boardState={liveScreen.boardState}
+        gameState={game.gameState}
         shutdown={shutdown}
         onPlaceCell={() => { }}
         onLeave={leaveSessionToLobby}
         interactionEnabled={false}
-        overlay={liveScreen.result === 'winner'
-          ? (
-            <WinnerScreen
-              reason={liveScreen.finishReason}
-              onReturnToLobby={returnToLobbyAndNavigate}
-              reviewGameHref={reviewGameHref}
-              onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}
-              onRequestRematch={liveScreen.rematch.showAction ? requestRematch : undefined}
-              isRematchAvailable={liveScreen.rematch.canRematch}
-              isRematchRequestedByCurrentPlayer={isRematchRequestedByCurrentPlayer}
-              isRematchRequestedByOpponent={isRematchRequestedByOpponent}
-            />
-          )
-          : (
-            <LoserScreen
-              reason={liveScreen.finishReason}
-              onReturnToLobby={returnToLobbyAndNavigate}
-              reviewGameHref={reviewGameHref}
-              onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}
-              onRequestRematch={liveScreen.rematch.showAction ? requestRematch : undefined}
-              isRematchAvailable={liveScreen.rematch.canRematch}
-              isRematchRequestedByCurrentPlayer={isRematchRequestedByCurrentPlayer}
-              isRematchRequestedByOpponent={isRematchRequestedByOpponent}
-            />
-          )}
+        overlay={(
+          <SpectatorFinishedScreen
+            reason={liveScreen.session.finishReason}
+            onReturnToLobby={returnToLobbyAndNavigate}
+            reviewGameHref={reviewGameHref}
+            onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}
+          />
+        )}
       />
     )
   }
-
-  const finishedGameId = liveScreen.finishedGameId
-  const reviewGameHref = finishedGameId ? buildFinishedGamePath(finishedGameId, 1, Date.now()) : undefined
+  
   return (
-    <GameScreen
-      sessionId={liveScreen.sessionId}
-      players={liveScreen.players}
-      playerNames={liveScreen.playerNames}
-      participantRole={liveScreen.participantRole}
-      currentPlayerId={connection.currentPlayerId}
-      boardState={liveScreen.boardState}
-      shutdown={shutdown}
-      onPlaceCell={() => { }}
-      onLeave={leaveSessionToLobby}
-      interactionEnabled={false}
-      overlay={(
-        <SpectatorFinishedScreen
-          reason={liveScreen.finishReason}
-          onReturnToLobby={returnToLobbyAndNavigate}
-          reviewGameHref={reviewGameHref}
-          onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}
-        />
-
-      )}
+    <SessionConnectingScreen
+      sessionId={sessionId}
+      isConnected={connection.isConnected}
+      onBack={returnToLobbyAndNavigate}
     />
   )
 }
