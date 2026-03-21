@@ -359,34 +359,48 @@ export class HttpApplication {
             };
         }
 
-        const inviteSessionId = getSingleQueryValue(req.query.join);
-        if (req.path === '/' && inviteSessionId) {
-            const inviteSession = this.sessionManager.getSessionInfo(inviteSessionId);
-            if (!inviteSession) {
-                return {
-                    ...defaultMetadata,
-                    title: `Invite Expired • ${DEFAULT_PAGE_TITLE}`,
-                    description: `Session ${inviteSessionId} is no longer active. Open the lobby to host or join another match.`,
-                    robots: 'noindex, nofollow'
-                };
-            }
-
-            const canJoin = canJoinSession(inviteSession);
+        const liveSessionMatch = req.path.match(/^\/session\/([^/]+)$/);
+        if (liveSessionMatch) {
+            const sessionId = decodeURIComponent(liveSessionMatch[1]);
             return {
                 ...defaultMetadata,
-                title: canJoin
-                    ? `Join Lobby ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`
-                    : `Spectate Match ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`,
-                description: canJoin
-                    ? `${describePlayersWaiting(inviteSession.players, inviteSession.gameOptions.visibility)} with ${formatTimeControl(inviteSession.gameOptions.timeControl)} time control. Click to join the match.`
-                    : `${describePlayersInMatch(inviteSession.players, inviteSession.gameOptions.visibility)} with ${formatTimeControl(inviteSession.gameOptions.timeControl)} time control. Open to spectate it live.`,
-                robots: 'noindex, nofollow'
-            };
+                ...this.describeSessionInvite(sessionId)
+            }
+        }
+
+        const inviteSessionId = getSingleQueryValue(req.query.join);
+        if (req.path === '/' && inviteSessionId) {
+            return {
+                ...defaultMetadata,
+                ...this.describeSessionInvite(inviteSessionId)
+            }
         }
 
         return {
             ...defaultMetadata,
             description: DEFAULT_PAGE_DESCRIPTION
+        };
+    }
+
+    private describeSessionInvite(inviteSessionId: string): Partial<PageMetadata> {
+        const inviteSession = this.sessionManager.getSessionInfo(inviteSessionId);
+        if (!inviteSession) {
+            return {
+                title: `Invite Expired • ${DEFAULT_PAGE_TITLE}`,
+                description: `Session ${inviteSessionId} is no longer active. Open the lobby to host or join another match.`,
+                robots: 'noindex, nofollow'
+            };
+        }
+
+        const canJoin = canJoinSession(inviteSession);
+        return {
+            title: canJoin
+                ? `Join Lobby ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`
+                : `Spectate Match ${inviteSession.id} • ${DEFAULT_PAGE_TITLE}`,
+            description: canJoin
+                ? `${describePlayersWaiting(inviteSession.players, inviteSession.gameOptions.visibility)} with ${formatTimeControl(inviteSession.gameOptions.timeControl)} time control. Click to join the match.`
+                : `${describePlayersInMatch(inviteSession.players, inviteSession.gameOptions.visibility)} with ${formatTimeControl(inviteSession.gameOptions.timeControl)} time control. Open to spectate it live.`,
+            robots: 'noindex, nofollow'
         };
     }
 

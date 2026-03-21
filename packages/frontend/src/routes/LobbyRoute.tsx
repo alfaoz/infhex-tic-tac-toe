@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import type { CreateSessionRequest } from '@ih3t/shared'
 import { Navigate, useNavigate, useSearchParams } from 'react-router'
 import LobbyScreen from '../components/LobbyScreen'
@@ -11,36 +11,18 @@ function LobbyRoute() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const inviteSessionId = searchParams.get('join')
-  const attemptedSessionIdRef = useRef<string | null>(null)
   const connection = useLiveGameStore(state => state.connection)
   const shutdown = useLiveGameStore(state => state.shutdown)
   const liveScreen = useLiveGameStore(state => state.screen)
   const availableSessionsQuery = useQueryAvailableSessions({ enabled: true })
 
   useEffect(() => {
-    attemptedSessionIdRef.current = null
-  }, [inviteSessionId])
-
-  useEffect(() => {
-    if (connection.isConnected) {
+    if (!inviteSessionId) {
       return
     }
 
-    attemptedSessionIdRef.current = null
-  }, [connection.isConnected])
-
-  useEffect(() => {
-    if (!inviteSessionId || !connection.isConnected || liveScreen.kind !== 'none') {
-      return
-    }
-
-    if (attemptedSessionIdRef.current === inviteSessionId) {
-      return
-    }
-
-    attemptedSessionIdRef.current = inviteSessionId
-    joinGame(inviteSessionId)
-  }, [connection.isConnected, inviteSessionId, liveScreen.kind])
+    void navigate(buildSessionPath(inviteSessionId), { replace: true })
+  }, [inviteSessionId, navigate])
 
   const createLobby = (request: CreateSessionRequest) => {
     void (async () => {
