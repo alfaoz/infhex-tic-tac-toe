@@ -5,6 +5,7 @@ ARG GITHUB_SHA
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
+RUN apk add git
 RUN corepack enable
 
 WORKDIR /app

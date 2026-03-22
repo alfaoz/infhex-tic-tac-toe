@@ -4,11 +4,11 @@ import {
     getCellKey,
     isCellWithinPlacementRadius,
     PLACE_CELL_HEX_RADIUS,
+    type GameState,
     zCellOccupant,
     type BoardCell,
     type GameMove
 } from '@ih3t/shared';
-import type { PublicGameStatePayload, ServerGameSession } from '../session/types';
 
 interface ApplyMoveParams {
     playerId: string;
@@ -32,78 +32,74 @@ export class SimulationError extends Error {
 
 @injectable()
 export class GameSimulation {
-    startSession(session: ServerGameSession): void {
-        session.boardState.playerTiles = buildPlayerTileConfigMap(session.players.map((player) => player.id));
-        session.boardState.highlightedCells = [];
-        this.setTurn(session, session.players[0]?.id ?? null, 1);
+    startSession(boardState: GameState, playerIds: readonly string[]): void {
+        boardState.playerTiles = buildPlayerTileConfigMap(playerIds);
+        boardState.highlightedCells = [];
+        this.setTurn(boardState, playerIds[0] ?? null, 1);
     }
 
-    getPublicGameState(session: ServerGameSession): PublicGameStatePayload {
+    getPublicGameState(boardState: GameState): GameState {
         return {
-            sessionId: session.id,
-            gameId: session.currentGameId,
-            gameState: {
-                cells: this.getBoardCells(session),
-                highlightedCells: session.boardState.highlightedCells.map((cell) => ({ ...cell })),
-                playerTiles: Object.fromEntries(
-                    Object.entries(session.boardState.playerTiles).map(([playerId, playerTileConfig]) => [playerId, { ...playerTileConfig }])
-                ),
-                currentTurnPlayerId: session.boardState.currentTurnPlayerId,
-                placementsRemaining: session.boardState.placementsRemaining,
-                currentTurnExpiresAt: session.boardState.currentTurnExpiresAt,
-                playerTimeRemainingMs: { ...session.boardState.playerTimeRemainingMs }
-            }
+            cells: this.getBoardCells(boardState),
+            highlightedCells: boardState.highlightedCells.map((cell) => ({ ...cell })),
+            playerTiles: Object.fromEntries(
+                Object.entries(boardState.playerTiles).map(([playerId, playerTileConfig]) => [playerId, { ...playerTileConfig }])
+            ),
+            currentTurnPlayerId: boardState.currentTurnPlayerId,
+            placementsRemaining: boardState.placementsRemaining,
+            currentTurnExpiresAt: boardState.currentTurnExpiresAt,
+            playerTimeRemainingMs: { ...boardState.playerTimeRemainingMs }
         };
     }
 
-    applyMove(session: ServerGameSession, params: ApplyMoveParams): ApplyMoveResult {
+    applyMove(boardState: GameState, params: ApplyMoveParams): ApplyMoveResult {
         const { playerId, x, y } = params;
         const timestamp = params.timestamp ?? Date.now();
 
-        if (session.boardState.currentTurnPlayerId !== playerId) {
+        if (boardState.currentTurnPlayerId !== playerId) {
             throw new SimulationError('It is not your turn');
         }
 
-        if (session.boardState.placementsRemaining <= 0) {
+        if (boardState.placementsRemaining <= 0) {
             throw new SimulationError('No placements remaining this turn');
         }
 
         const cellKey = getCellKey(x, y);
-        const isOccupied = session.boardState.cells.some((cell) => getCellKey(cell.x, cell.y) === cellKey);
+        const isOccupied = boardState.cells.some((cell) => getCellKey(cell.x, cell.y) === cellKey);
         if (isOccupied) {
             throw new SimulationError('Cell is already occupied');
         }
 
-        if (session.boardState.cells.length === 0 && (x !== 0 || y !== 0)) {
+        if (boardState.cells.length === 0 && (x !== 0 || y !== 0)) {
             throw new SimulationError('First placement must be at the origin');
         }
 
-        if (!isCellWithinPlacementRadius(session.boardState.cells, { x, y })) {
+        if (!isCellWithinPlacementRadius(boardState.cells, { x, y })) {
             throw new SimulationError(`Cell must be within ${PLACE_CELL_HEX_RADIUS} hexes of an existing placed cell`);
         }
-        const isFirstPlacementOfTurn = session.moveHistory.length === 0 || session.boardState.placementsRemaining === 2;
-        const turnCompleted = session.boardState.placementsRemaining === 1;
+        const isFirstPlacementOfTurn = boardState.cells.length === 0 || boardState.placementsRemaining === 2;
+        const turnCompleted = boardState.placementsRemaining === 1;
+        const playerIds = Object.keys(boardState.playerTiles);
 
         const move: GameMove = {
-            moveNumber: session.moveHistory.length + 1,
+            moveNumber: boardState.cells.length + 1,
             playerId,
             x,
             y,
             timestamp
         };
 
-        session.boardState.cells.push({
+        boardState.cells.push({
             x,
             y,
             occupiedBy: zCellOccupant.parse(playerId)
         });
-        session.boardState.highlightedCells = isFirstPlacementOfTurn
+        boardState.highlightedCells = isFirstPlacementOfTurn
             ? [{ x, y }]
-            : [...session.boardState.highlightedCells, { x, y }].slice(-2);
-        session.moveHistory.push(move);
-        session.boardState.placementsRemaining -= 1;
+            : [...boardState.highlightedCells, { x, y }].slice(-2);
+        boardState.placementsRemaining -= 1;
 
-        if (this.hasSixInARow(session, playerId, x, y)) {
+        if (this.hasSixInARow(boardState, playerId, x, y)) {
             return {
                 move,
                 turnCompleted,
@@ -112,9 +108,9 @@ export class GameSimulation {
         }
 
         if (turnCompleted) {
-            const currentPlayerIndex = session.players.findIndex((player) => player.id === playerId);
+            const currentPlayerIndex = playerIds.findIndex((existingPlayerId) => existingPlayerId === playerId);
             const nextPlayerIndex = currentPlayerIndex === 0 ? 1 : 0;
-            this.setTurn(session, session.players[nextPlayerIndex]?.id ?? playerId, 2);
+            this.setTurn(boardState, playerIds[nextPlayerIndex] ?? playerId, 2);
         }
 
         return {
@@ -124,16 +120,16 @@ export class GameSimulation {
         };
     }
 
-    private setTurn(session: ServerGameSession, playerId: string | null, placementsRemaining: number): void {
-        session.boardState.currentTurnPlayerId = playerId;
-        session.boardState.placementsRemaining = playerId ? placementsRemaining : 0;
+    private setTurn(boardState: GameState, playerId: string | null, placementsRemaining: number): void {
+        boardState.currentTurnPlayerId = playerId;
+        boardState.placementsRemaining = playerId ? placementsRemaining : 0;
         if (!playerId) {
-            session.boardState.currentTurnExpiresAt = null;
+            boardState.currentTurnExpiresAt = null;
         }
     }
 
-    private getBoardCells(session: ServerGameSession): BoardCell[] {
-        return [...session.boardState.cells].sort((a, b) => {
+    private getBoardCells(boardState: GameState): BoardCell[] {
+        return [...boardState.cells].sort((a, b) => {
             if (a.y === b.y) {
                 return a.x - b.x;
             }
@@ -142,9 +138,9 @@ export class GameSimulation {
         });
     }
 
-    private hasSixInARow(session: ServerGameSession, playerId: string, x: number, y: number): boolean {
+    private hasSixInARow(boardState: GameState, playerId: string, x: number, y: number): boolean {
         const occupiedCells = new Set(
-            session.boardState.cells
+            boardState.cells
                 .filter((cell) => cell.occupiedBy === playerId)
                 .map((cell) => getCellKey(cell.x, cell.y))
         );

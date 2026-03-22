@@ -26,6 +26,7 @@ import type {
     CreateSessionParams,
     JoinSessionParams,
     JoinSessionResult,
+    PublicGameStatePayload,
     ParticipantJoinedEvent,
     ParticipantLeftEvent,
     PlayerLeaveSource,
@@ -284,7 +285,7 @@ export class SessionManager {
 
                 isNewParticipant: false,
 
-                gameState: this.simulation.getPublicGameState(session),
+                gameState: this.getPublicGameStatePayload(session),
             }
         } else if (existingParticipation) {
             throw new SessionError('Socket already bound to a session');
@@ -350,7 +351,7 @@ export class SessionManager {
             participantId: participant.id,
             participantRole: role,
             isNewParticipant: true,
-            gameState: this.simulation.getPublicGameState(session)
+            gameState: this.getPublicGameStatePayload(session)
         };
     }
 
@@ -435,7 +436,7 @@ export class SessionManager {
         const turnExpiresAt = session.boardState.currentTurnExpiresAt;
         try {
             this.timeControl.ensureTurnHasTimeRemaining(session, timestamp);
-            moveResult = this.simulation.applyMove(session, {
+            moveResult = this.simulation.applyMove(session.boardState, {
                 playerId: participantId,
                 x,
                 y,
@@ -456,6 +457,7 @@ export class SessionManager {
             turnExpiresAt
         });
 
+        session.moveHistory.push(moveResult.move);
         void this.gameHistoryRepository.appendMove(session.currentGameId, moveResult.move);
 
         if (moveResult.winningPlayerId) {
@@ -654,7 +656,7 @@ export class SessionManager {
         session.isRatedGame = this.isRatedGameEnabled(session);
         this.clearParticipantEloChanges(session.players);
         this.clearParticipantEloChanges(session.spectators);
-        this.simulation.startSession(session);
+        this.simulation.startSession(session.boardState, session.players.map((player) => player.id));
         this.timeControl.startSession(session, this.handleTurnExpired, session.startedAt);
 
         this.emitGameState(session);
@@ -676,7 +678,7 @@ export class SessionManager {
         const finishedAt = Date.now();
         session.state = 'finished';
         this.timeControl.freezeActiveTurnState(session, finishedAt);
-        session.boardState = cloneGameBoard(this.simulation.getPublicGameState(session).gameState);
+        session.boardState = cloneGameBoard(this.simulation.getPublicGameState(session.boardState));
         session.finishReason = reason;
         session.winningPlayerId = winningPlayerId;
         session.rematchAcceptedPlayerIds = [];
@@ -816,7 +818,15 @@ export class SessionManager {
     }
 
     private emitGameState(session: ServerGameSession): void {
-        this.eventHandlers.gameStateUpdated?.(this.simulation.getPublicGameState(session));
+        this.eventHandlers.gameStateUpdated?.(this.getPublicGameStatePayload(session));
+    }
+
+    private getPublicGameStatePayload(session: ServerGameSession): PublicGameStatePayload {
+        return {
+            sessionId: session.id,
+            gameId: session.currentGameId,
+            gameState: this.simulation.getPublicGameState(session.boardState)
+        };
     }
 
     private requireSession(sessionId: string): ServerGameSession {
@@ -913,7 +923,7 @@ export class SessionManager {
 
         return {
             session: this.toSessionInfo(info.session),
-            gameState: this.simulation.getPublicGameState(info.session),
+            gameState: this.getPublicGameStatePayload(info.session),
             participantId: info.participationId
         }
     }
@@ -945,7 +955,7 @@ export class SessionManager {
 
         return {
             session: this.toSessionInfo(info.session),
-            gameState: this.simulation.getPublicGameState(info.session),
+            gameState: this.getPublicGameStatePayload(info.session),
             participantId: info.participantId
         }
     }
