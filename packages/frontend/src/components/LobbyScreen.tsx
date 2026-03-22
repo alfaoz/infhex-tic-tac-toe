@@ -4,6 +4,7 @@ import CreateLobbyDialog from './CreateLobbyDialog'
 import { formatTimeControl } from '../lobbyOptions'
 import { getInitialRenderTimestamp } from '../ssrState'
 import ScreenFooter from './ScreenFooter'
+import { useHydratedDelay } from '../useHydratedDelay'
 
 interface LobbyScreenProps {
   isConnected: boolean
@@ -76,6 +77,7 @@ function LobbyScreen({
   const isPlayingDisabled = !isConnected || Boolean(shutdown)
   const [now, setNow] = useState(() => getInitialRenderTimestamp())
   const [isCreateLobbyDialogOpen, setIsCreateLobbyDialogOpen] = useState(false)
+  const showClientBadges = useHydratedDelay(500)
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -144,12 +146,12 @@ function LobbyScreen({
               >
                 {shutdown ? 'Restart Pending' : 'Host Match'}
               </button>
-              {!isConnected && (
+              {showClientBadges && !isConnected && (
                 <div className="inline-flex items-center rounded-full border text-center border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">
                   Not connected to server
                 </div>
               )}
-              {shutdown && (
+              {showClientBadges && shutdown && (
                 <div className="inline-flex items-center rounded-full border text-center border-amber-300/40 bg-amber-300/10 px-4 py-3 text-sm font-medium text-amber-100">
                   New matches are disabled until the restart completes.
                 </div>
