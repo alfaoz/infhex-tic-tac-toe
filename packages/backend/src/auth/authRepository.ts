@@ -18,6 +18,8 @@ interface AuthUserDocument extends Document {
     emailVerified?: Date | null;
     image?: string | null;
     role?: UserRole;
+    registeredAt?: number;
+    lastActiveAt?: number;
 }
 
 interface AuthAccountDocument extends Document {
@@ -51,6 +53,8 @@ interface AuthVerificationTokenDocument extends Document {
 
 type StoredAdapterUser = AdapterUser & {
     role: UserRole;
+    registeredAt: number;
+    lastActiveAt: number;
 };
 
 export interface AccountUserProfile {
@@ -59,6 +63,8 @@ export interface AccountUserProfile {
     email: string | null;
     image: string | null;
     role: UserRole;
+    registeredAt: number;
+    lastActiveAt: number;
 }
 
 const USERS_COLLECTION_NAME = process.env.MONGODB_AUTH_USERS_COLLECTION ?? 'users';
@@ -68,6 +74,7 @@ const VERIFICATION_TOKENS_COLLECTION_NAME = process.env.MONGODB_AUTH_VERIFICATIO
 
 @injectable()
 export class AuthRepository implements Adapter {
+    private static readonly LAST_ACTIVE_WRITE_INTERVAL_MS = 60_000;
     private readonly logger: Logger;
     private usersCollectionPromise: Promise<Collection<AuthUserDocument>> | null = null;
     private accountsCollectionPromise: Promise<Collection<AuthAccountDocument>> | null = null;
@@ -83,10 +90,12 @@ export class AuthRepository implements Adapter {
 
     readonly createUser: NonNullable<Adapter['createUser']> = async (user) => {
         const collection = await this.getUsersCollection();
-        const now = new ObjectId();
+        const now = Date.now();
         const document: AuthUserDocument = {
-            _id: now,
+            _id: new ObjectId(),
             role: 'user',
+            registeredAt: now,
+            lastActiveAt: now,
             ...this.toUserDocument(user),
         };
 
@@ -301,7 +310,8 @@ export class AuthRepository implements Adapter {
             return null;
         }
 
-        return this.mapAccountUserProfile(sessionAndUser.user);
+        const user = await this.touchUserLastActive(sessionAndUser.user);
+        return this.mapAccountUserProfile(user);
     }
 
     async updateUsername(userId: string, username: string): Promise<AccountUserProfile | null> {
@@ -347,6 +357,7 @@ export class AuthRepository implements Adapter {
             const database = await this.mongoDatabase.getDatabase();
             const collection = database.collection<AuthUserDocument>(USERS_COLLECTION_NAME);
             await collection.createIndex({ email: 1 }, { unique: true, sparse: true });
+            await this.migrateExistingUsers(collection);
             return collection;
         })().catch((error: unknown) => {
             this.usersCollectionPromise = null;
@@ -426,7 +437,45 @@ export class AuthRepository implements Adapter {
         return new ObjectId(value);
     }
 
+    private async migrateExistingUsers(collection: Collection<AuthUserDocument>): Promise<void> {
+        const legacyDocuments = await collection.find({
+            $or: [
+                { registeredAt: { $exists: false } },
+                { lastActiveAt: { $exists: false } },
+            ]
+        } as Document).toArray();
+
+        if (legacyDocuments.length === 0) {
+            return;
+        }
+
+        await collection.bulkWrite(
+            legacyDocuments.map((document) => {
+                const registeredAt = this.resolveRegisteredAt(document);
+                return {
+                    updateOne: {
+                        filter: { _id: document._id },
+                        update: {
+                            $set: {
+                                registeredAt,
+                                lastActiveAt: this.resolveLastActiveAt(document, registeredAt),
+                            }
+                        }
+                    }
+                };
+            }),
+            { ordered: false }
+        );
+
+        this.logger.info({
+            event: 'auth.users.migration.complete',
+            migratedUsers: legacyDocuments.length
+        }, 'Migrated legacy auth users with missing account timestamps');
+    }
+
     private mapUserDocument(document: AuthUserDocument): StoredAdapterUser {
+        const registeredAt = this.resolveRegisteredAt(document);
+
         return {
             id: document._id.toHexString(),
             name: document.name ?? null,
@@ -434,6 +483,8 @@ export class AuthRepository implements Adapter {
             emailVerified: document.emailVerified ?? null,
             image: document.image ?? null,
             role: document.role ?? 'user',
+            registeredAt,
+            lastActiveAt: this.resolveLastActiveAt(document, registeredAt),
         };
     }
 
@@ -446,14 +497,84 @@ export class AuthRepository implements Adapter {
     }
 
     private mapAccountUserProfile(
-        user: AdapterUser & { role?: UserRole }
+        user: AdapterUser & { role?: UserRole; registeredAt?: number; lastActiveAt?: number }
     ): AccountUserProfile {
+        const registeredAt = this.normalizeTimestamp(user.registeredAt) ?? Date.now();
+
         return {
             id: user.id,
             username: user.name?.trim() || 'Player',
             email: user.email || null,
             image: user.image ?? null,
             role: user.role ?? 'user',
+            registeredAt,
+            lastActiveAt: this.normalizeTimestamp(user.lastActiveAt) ?? registeredAt,
+        };
+    }
+
+    private async touchUserLastActive(
+        user: AdapterUser & { role?: UserRole; registeredAt?: number; lastActiveAt?: number }
+    ): Promise<StoredAdapterUser> {
+        const storedUser = this.toStoredAdapterUser(user);
+        const now = Date.now();
+        if (storedUser.lastActiveAt >= now - AuthRepository.LAST_ACTIVE_WRITE_INTERVAL_MS) {
+            return storedUser;
+        }
+
+        const userId = this.parseObjectId(storedUser.id);
+        if (!userId) {
+            return {
+                ...storedUser,
+                lastActiveAt: now,
+            };
+        }
+
+        const collection = await this.getUsersCollection();
+        await collection.updateOne(
+            { _id: userId },
+            {
+                $set: {
+                    lastActiveAt: now,
+                }
+            }
+        );
+
+        return {
+            ...storedUser,
+            lastActiveAt: now,
+        };
+    }
+
+    private resolveRegisteredAt(document: Pick<AuthUserDocument, '_id' | 'registeredAt'>): number {
+        return this.normalizeTimestamp(document.registeredAt)
+            ?? document._id.getTimestamp().valueOf();
+    }
+
+    private resolveLastActiveAt(
+        document: Pick<AuthUserDocument, 'lastActiveAt'>,
+        registeredAt: number
+    ): number {
+        return this.normalizeTimestamp(document.lastActiveAt) ?? registeredAt;
+    }
+
+    private normalizeTimestamp(value: number | undefined | null): number | null {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+            return null;
+        }
+
+        return Math.max(0, Math.floor(value));
+    }
+
+    private toStoredAdapterUser(
+        user: AdapterUser & { role?: UserRole; registeredAt?: number; lastActiveAt?: number }
+    ): StoredAdapterUser {
+        const registeredAt = this.normalizeTimestamp(user.registeredAt) ?? Date.now();
+
+        return {
+            ...user,
+            role: user.role ?? 'user',
+            registeredAt,
+            lastActiveAt: this.normalizeTimestamp(user.lastActiveAt) ?? registeredAt,
         };
     }
 

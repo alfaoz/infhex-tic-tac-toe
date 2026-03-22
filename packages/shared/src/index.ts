@@ -433,7 +433,9 @@ export const zAccountProfile = z.object({
     username: z.string(),
     email: z.string().nullable(),
     image: z.string().nullable(),
-    role: zUserRole
+    role: zUserRole,
+    registeredAt: zTimestamp,
+    lastActiveAt: zTimestamp
 });
 export type AccountProfile = z.infer<typeof zAccountProfile>;
 

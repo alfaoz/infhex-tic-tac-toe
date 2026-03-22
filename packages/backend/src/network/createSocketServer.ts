@@ -427,7 +427,9 @@ export class SocketServerGateway {
             username: `Guest ${fallbackSuffix}`,
             email: null,
             image: null,
-            role: 'user'
+            role: 'user',
+            registeredAt: Date.now(),
+            lastActiveAt: Date.now()
         };
     }
 
