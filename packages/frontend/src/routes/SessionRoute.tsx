@@ -498,7 +498,7 @@ function SessionRoute() {
           interactionEnabled={false}
           overlay={(
             <SpectatorFinishedScreen
-              reason={liveScreen.session.finishReason}
+              session={liveScreen.session}
               onReturnToLobby={returnToLobbyAndNavigate}
               reviewGameHref={reviewGameHref}
               onReviewGame={finishedGameId ? (event) => handleFinishedGameReviewClick(event, finishedGameId) : undefined}

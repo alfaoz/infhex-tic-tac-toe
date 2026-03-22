@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react'
 import type { SessionInfo } from '@ih3t/shared'
 import FinishedPlayerScreen from './FinishedPlayerScreen'
+import { getWinnerResultMessage } from './sessionResultCopy'
 
 type FinishedSessionInfo = Extract<SessionInfo, { state: 'finished' }>
 
@@ -21,23 +22,13 @@ function WinnerScreen({
   onReviewGame,
   onRequestRematch
 }: Readonly<WinnerScreenProps>) {
-  const message = session.finishReason === 'timeout'
-    ? 'The other player failed to place a cell before the timer ran out.'
-    : session.finishReason === 'six-in-a-row'
-      ? 'You completed a six-tile row.'
-      : session.finishReason === 'surrender'
-        ? 'The other player surrendered.'
-        : session.finishReason === 'terminated'
-          ? 'The match has been terminated.'
-          : 'The other player disconnected.'
-
   return (
     <FinishedPlayerScreen
       session={session}
       currentPlayerId={currentPlayerId}
       variant="win"
       title="You've Won"
-      message={message}
+      message={getWinnerResultMessage(session.finishReason)}
       onReturnToLobby={onReturnToLobby}
       reviewGameHref={reviewGameHref}
       onReviewGame={onReviewGame}
