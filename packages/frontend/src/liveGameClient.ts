@@ -78,7 +78,6 @@ export function startLiveGameClient() {
 
   socket.on('connect', () => {
     useLiveGameStore.getState().setConnected()
-    void fetchAvailableSessions()
   })
 
   socket.on('initialized', () => {
@@ -178,15 +177,6 @@ export function stopLiveGameClient() {
   useLiveGameStore.getState().setDisconnected()
 }
 
-export async function fetchAvailableSessions() {
-  try {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.availableSessions })
-  } catch (error) {
-    console.error('Failed to fetch sessions:', error)
-    showErrorToast('Failed to fetch available sessions.')
-  }
-}
-
 export async function hostGame(request: CreateSessionRequest): Promise<string | null> {
   try {
     const data = await fetchJson<CreateSessionResponse>('/api/sessions', {
@@ -232,7 +222,6 @@ export function leaveGame() {
 
   socket.emit('leave-session', activeSessionId)
   state.resetToLobby()
-  void fetchAvailableSessions()
 }
 
 export function surrenderGame() {
