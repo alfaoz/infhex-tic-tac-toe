@@ -100,7 +100,10 @@ export class AuthRepository implements Adapter {
         const document: AuthUserDocument = {
             _id: new ObjectId(),
             role: 'user',
-            preferences: DEFAULT_ACCOUNT_PREFERENCES,
+            preferences: {
+                ...DEFAULT_ACCOUNT_PREFERENCES,
+                changelogReadAt: Date.now()
+            },
             registeredAt: now,
             lastActiveAt: now,
             ...this.toUserDocument(user),
