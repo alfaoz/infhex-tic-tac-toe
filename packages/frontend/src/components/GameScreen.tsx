@@ -22,6 +22,7 @@ interface GameScreenProps {
   leaveLabel?: string
   overlay?: ReactNode
   interactionEnabled?: boolean
+  showTilePieceMarkers?: boolean
 }
 
 function GameScreen({
@@ -37,7 +38,8 @@ function GameScreen({
   onLeave,
   leaveLabel,
   overlay,
-  interactionEnabled = true
+  interactionEnabled = true,
+  showTilePieceMarkers = false
 }: Readonly<GameScreenProps>) {
   const previousCellCountRef = useRef(gameState.cells.length)
 
@@ -70,6 +72,7 @@ function GameScreen({
     highlightedCells: gameState.highlightedCells,
     localPlayerId: isSpectator ? null : currentPlayerId,
     interactionEnabled,
+    showTilePieceMarkers,
     onPlaceCell: canPlaceCell ? onPlaceCell : undefined
   })
 

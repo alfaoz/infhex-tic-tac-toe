@@ -7,6 +7,7 @@ import {
   HexCell,
   axialToUnitPoint,
   buildHexLine,
+  buildTilePieceMarkerMap,
   buildRenderableCells,
   clampScale,
   getCellKey,
@@ -55,6 +56,7 @@ interface UseGameBoardOptions {
   localPlayerId: string | null
   interactionEnabled: boolean
   onPlaceCell?: (x: number, y: number) => void
+  showTilePieceMarkers?: boolean
 }
 
 interface UseGameBoardResult {
@@ -77,12 +79,178 @@ interface UseGameBoardResult {
   resetView: () => void
 }
 
+function traceTilePieceXPath(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  markerRadius: number
+) {
+  context.beginPath()
+  context.moveTo(centerX - markerRadius, centerY - markerRadius)
+  context.lineTo(centerX + markerRadius, centerY + markerRadius)
+  context.moveTo(centerX + markerRadius, centerY - markerRadius)
+  context.lineTo(centerX - markerRadius, centerY + markerRadius)
+}
+
+function traceTilePieceOPath(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  markerRadius: number
+) {
+  context.beginPath()
+  context.arc(centerX, centerY, markerRadius, 0, Math.PI * 2)
+}
+
+interface RgbColor {
+  r: number
+  g: number
+  b: number
+}
+
+interface TilePieceMarkerPalette {
+  tileTintColor: string
+  tileOutlineShadowColor: string
+  tileOutlineColor: string
+  markerShadowColor: string
+  markerOutlineColor: string
+  markerFillColor: string
+  accentColor: string
+}
+
+function clampChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)))
+}
+
+function parseHexColor(color: string): RgbColor | null {
+  const normalizedColor = color.trim()
+  const hexMatch = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(normalizedColor)
+  if (!hexMatch) {
+    return null
+  }
+
+  const hexValue = hexMatch[1]
+  if (hexValue.length === 3) {
+    return {
+      r: Number.parseInt(`${hexValue[0]}${hexValue[0]}`, 16),
+      g: Number.parseInt(`${hexValue[1]}${hexValue[1]}`, 16),
+      b: Number.parseInt(`${hexValue[2]}${hexValue[2]}`, 16)
+    }
+  }
+
+  return {
+    r: Number.parseInt(hexValue.slice(0, 2), 16),
+    g: Number.parseInt(hexValue.slice(2, 4), 16),
+    b: Number.parseInt(hexValue.slice(4, 6), 16)
+  }
+}
+
+function mixRgbColor(baseColor: RgbColor, targetColor: RgbColor, amount: number): RgbColor {
+  const safeAmount = Math.max(0, Math.min(1, amount))
+  return {
+    r: clampChannel(baseColor.r + (targetColor.r - baseColor.r) * safeAmount),
+    g: clampChannel(baseColor.g + (targetColor.g - baseColor.g) * safeAmount),
+    b: clampChannel(baseColor.b + (targetColor.b - baseColor.b) * safeAmount)
+  }
+}
+
+function withAlpha(color: RgbColor, alpha: number): string {
+  return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
+}
+
+function getRelativeLuminance(color: RgbColor): number {
+  return (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255
+}
+
+function getTilePieceMarkerPalette(tileColor: string): TilePieceMarkerPalette {
+  const parsedTileColor = parseHexColor(tileColor)
+  if (!parsedTileColor) {
+    return {
+      tileTintColor: 'rgba(255, 255, 255, 0.04)',
+      tileOutlineShadowColor: 'rgba(15, 23, 42, 0.38)',
+      tileOutlineColor: 'rgba(226, 232, 240, 0.92)',
+      markerShadowColor: 'rgba(15, 23, 42, 0.26)',
+      markerOutlineColor: 'rgba(15, 23, 42, 0.96)',
+      markerFillColor: 'rgba(226, 232, 240, 0.98)',
+      accentColor: 'rgba(255, 255, 255, 0.18)'
+    }
+  }
+
+  const slate900 = { r: 15, g: 23, b: 42 }
+  const slate950 = { r: 2, g: 6, b: 23 }
+  const white = { r: 255, g: 255, b: 255 }
+  const luminance = getRelativeLuminance(parsedTileColor)
+  const tileOutlineBase = luminance > 0.72
+    ? mixRgbColor(parsedTileColor, slate900, 0.12)
+    : mixRgbColor(parsedTileColor, white, 0.06)
+  const markerOutlineBase = mixRgbColor(parsedTileColor, slate950, luminance > 0.62 ? 0.82 : 0.74)
+  const accentBase = luminance > 0.62
+    ? mixRgbColor(parsedTileColor, white, 0.22)
+    : mixRgbColor(parsedTileColor, white, 0.38)
+
+  return {
+    tileTintColor: withAlpha(mixRgbColor(parsedTileColor, white, 0.2), 0.08),
+    tileOutlineShadowColor: withAlpha(mixRgbColor(parsedTileColor, slate950, 0.8), 0.42),
+    tileOutlineColor: withAlpha(tileOutlineBase, 0.98),
+    markerShadowColor: withAlpha(mixRgbColor(parsedTileColor, slate950, 0.72), 0.28),
+    markerOutlineColor: withAlpha(markerOutlineBase, 0.98),
+    markerFillColor: withAlpha(parsedTileColor, 0.98),
+    accentColor: withAlpha(accentBase, luminance > 0.62 ? 0.18 : 0.22)
+  }
+}
+
+function drawTilePieceMarker(
+  context: CanvasRenderingContext2D,
+  marker: 'X' | 'O',
+  centerX: number,
+  centerY: number,
+  hexRadius: number,
+  tileColor: string
+) {
+  const markerRadius = Math.max(5, hexRadius * 0.36)
+  const lineWidth = Math.max(2.25, hexRadius * 0.16)
+  const drawMarkerPath = marker === 'X' ? traceTilePieceXPath : traceTilePieceOPath
+  const palette = getTilePieceMarkerPalette(tileColor)
+
+  context.save()
+  traceHexPath(context, centerX, centerY, Math.max(4, hexRadius - 4))
+  context.clip()
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+
+  context.save()
+  context.translate(lineWidth * 0.14, lineWidth * 0.18)
+  drawMarkerPath(context, centerX, centerY, markerRadius)
+  context.strokeStyle = palette.markerShadowColor
+  context.lineWidth = lineWidth + Math.max(1.5, hexRadius * 0.04)
+  context.stroke()
+  context.restore()
+
+  drawMarkerPath(context, centerX, centerY, markerRadius)
+  context.strokeStyle = palette.markerOutlineColor
+  context.lineWidth = lineWidth + Math.max(0.75, hexRadius * 0.02)
+  context.stroke()
+
+  drawMarkerPath(context, centerX, centerY, markerRadius)
+  context.strokeStyle = palette.markerFillColor
+  context.lineWidth = Math.max(1.5, lineWidth * 0.7)
+  context.stroke()
+
+  drawMarkerPath(context, centerX, centerY, markerRadius)
+  context.strokeStyle = palette.accentColor
+  context.lineWidth = Math.max(1, lineWidth * 0.34)
+  context.stroke()
+
+  context.restore()
+}
+
 function useGameBoard({
   boardState,
   localPlayerId,
   interactionEnabled,
   onPlaceCell,
-  highlightedCells
+  highlightedCells,
+  showTilePieceMarkers = false
 }: Readonly<UseGameBoardOptions>): UseGameBoardResult {
   const isSpectator = localPlayerId === null
   const isOwnTurn = localPlayerId !== null && boardState.currentTurnPlayerId === localPlayerId
@@ -104,6 +272,7 @@ function useGameBoard({
   const latestDataRef = useRef<{
     boardState: BoardState
     renderableCells: ReturnType<typeof buildRenderableCells>
+    tilePieceMarkers: Map<string, 'X' | 'O'>
     highlightedCellKeys: Set<string>
     interactionEnabled: boolean
     canPlaceCell: boolean
@@ -120,9 +289,15 @@ function useGameBoard({
     [highlightedCells]
   )
 
+  const tilePieceMarkers = useMemo(
+    () => showTilePieceMarkers ? buildTilePieceMarkerMap(boardState.cells) : new Map<string, 'X' | 'O'>(),
+    [boardState.cells, showTilePieceMarkers]
+  )
+
   latestDataRef.current = {
     boardState,
     renderableCells,
+    tilePieceMarkers,
     highlightedCellKeys,
     interactionEnabled,
     canPlaceCell,
@@ -183,9 +358,28 @@ function useGameBoard({
 
       /* fill color */
       if (cell.color) {
-        traceHexPath(context, screenX, screenY, hexRadius - 2)
-        context.fillStyle = cell.color
-        context.fill()
+        const tilePieceMarker = latestData.tilePieceMarkers.get(cell.key)
+        if (tilePieceMarker) {
+          const markerPalette = getTilePieceMarkerPalette(cell.color)
+
+          traceHexPath(context, screenX, screenY, hexRadius - 2)
+          context.fillStyle = markerPalette.tileTintColor
+          context.fill()
+
+          traceHexPath(context, screenX, screenY, hexRadius - 2)
+          context.strokeStyle = markerPalette.tileOutlineShadowColor
+          context.lineWidth = Math.max(2.5, scale * 0.09)
+          context.stroke()
+
+          traceHexPath(context, screenX, screenY, hexRadius - 2)
+          context.strokeStyle = markerPalette.tileOutlineColor
+          context.lineWidth = Math.max(1.6, scale * 0.055)
+          context.stroke()
+        } else {
+          traceHexPath(context, screenX, screenY, hexRadius - 2)
+          context.fillStyle = cell.color
+          context.fill()
+        }
       }
 
       /* highlight */
@@ -202,6 +396,11 @@ function useGameBoard({
         traceHexPath(context, screenX, screenY, Math.max(4, hexRadius - 6))
         context.fillStyle = 'rgba(255, 255, 255, 0.12)'
         context.fill()
+      }
+
+      const tilePieceMarker = latestData.tilePieceMarkers.get(cell.key)
+      if (cell.color && tilePieceMarker && hexRadius >= 10) {
+        drawTilePieceMarker(context, tilePieceMarker, screenX, screenY, hexRadius, cell.color)
       }
     }
 
@@ -455,7 +654,7 @@ function useGameBoard({
 
   useEffect(() => {
     scheduleDraw()
-  }, [boardState, renderableCells, highlightedCellKeys, interactionEnabled, canPlaceCell, isOwnTurn])
+  }, [boardState, renderableCells, tilePieceMarkers, highlightedCellKeys, interactionEnabled, canPlaceCell, isOwnTurn])
 
   useEffect(() => {
     const canvas = canvasRef.current

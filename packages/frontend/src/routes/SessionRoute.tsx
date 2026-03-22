@@ -16,6 +16,7 @@ import {
   surrenderGame
 } from '../liveGameClient'
 import { useLiveGameStore } from '../liveGameStore'
+import { useQueryAccount, useQueryAccountPreferences } from '../queryHooks'
 import { buildFinishedGamePath } from './archiveRouteState'
 
 function isPlainLeftClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -169,7 +170,12 @@ function SessionRoute() {
   const pendingSessionJoin = useLiveGameStore(state => state.pendingSessionJoin)
   const shutdown = useLiveGameStore(state => state.shutdown)
   const liveScreen = useLiveGameStore(state => state.screen)
+  const accountQuery = useQueryAccount({ enabled: true })
+  const accountPreferencesQuery = useQueryAccountPreferences({
+    enabled: Boolean(accountQuery.data?.user)
+  })
   const currentPlayerId = connection.currentPlayerId
+  const showTilePieceMarkers = accountPreferencesQuery.data?.preferences.tilePieceMarkers ?? false
   const shouldBlockLeave = liveScreen.kind === 'session'
     && liveScreen.session.state === 'in-game'
     && getParticipantRole(liveScreen.session.players, currentPlayerId) === 'player'
@@ -417,6 +423,7 @@ function SessionRoute() {
           onPlaceCell={placeCell}
           onLeave={participantRole === 'player' ? surrenderGame : returnToLobbyAndNavigate}
           leaveLabel={participantRole === 'player' ? 'Surrender' : 'Leave Game'}
+          showTilePieceMarkers={showTilePieceMarkers}
         />
         {leaveConfirmModal}
       </>
@@ -455,6 +462,7 @@ function SessionRoute() {
             onPlaceCell={() => { }}
             onLeave={returnToLobbyAndNavigate}
             interactionEnabled={false}
+            showTilePieceMarkers={showTilePieceMarkers}
             overlay={result === 'winner'
               ? (
                 <WinnerScreen
@@ -496,6 +504,7 @@ function SessionRoute() {
           onPlaceCell={() => { }}
           onLeave={returnToLobbyAndNavigate}
           interactionEnabled={false}
+          showTilePieceMarkers={showTilePieceMarkers}
           overlay={(
             <SpectatorFinishedScreen
               session={liveScreen.session}

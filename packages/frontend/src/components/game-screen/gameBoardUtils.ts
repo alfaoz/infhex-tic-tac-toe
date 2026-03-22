@@ -30,6 +30,8 @@ export interface RenderableCell extends HexCell {
   color: string | null,
 }
 
+export type TilePieceMarker = 'X' | 'O'
+
 type PlayerReference = string | DatabaseGamePlayer
 
 function getPlayerId(player: PlayerReference): string {
@@ -227,6 +229,20 @@ export function buildRenderableCells(cells: BoardCell[], tileConfigs: Record<str
   }
 
   return renderableCells
+}
+
+export function buildTilePieceMarkerMap(cells: readonly BoardCell[]): Map<string, TilePieceMarker> {
+  const tilePieceMarkers = new Map<string, TilePieceMarker>()
+  const xPlayerId = cells.find((cell) => cell.x === 0 && cell.y === 0)?.occupiedBy ?? null
+  if (!xPlayerId) {
+    return tilePieceMarkers
+  }
+
+  for (const cell of cells) {
+    tilePieceMarkers.set(getCellKey(cell.x, cell.y), cell.occupiedBy === xPlayerId ? 'X' : 'O')
+  }
+
+  return tilePieceMarkers
 }
 
 function hexDistance(a: HexCell, b: HexCell): number {
