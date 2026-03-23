@@ -11,7 +11,7 @@ import {
     type SessionParticipantRole,
     type ShutdownState,
 } from '@ih3t/shared';
-import type { RequestClientInfo, SocketClientInfo } from '../network/clientInfo';
+import type { RequestClientInfo } from '../network/clientInfo';
 import type { AccountUserProfile } from '../auth/authRepository';
 
 export type ServerParticipantConnection = ParticipantConnection & ({
@@ -20,12 +20,20 @@ export type ServerParticipantConnection = ParticipantConnection & ({
 } | {
     status: 'orphaned';
     timeout: ReturnType<typeof setTimeout>;
+} | {
+    status: 'disconnected';
+    timestamp: number;
 });
 
 export interface ServerSessionParticipant extends SessionParticipant {
     deviceId: string
 
     connection: ServerParticipantConnection
+}
+
+export type ServerSessionParticipation = {
+    participant: ServerSessionParticipant,
+    role: SessionParticipantRole,
 }
 
 export interface ServerGameSession {
@@ -41,7 +49,6 @@ export interface ServerGameSession {
     finishReason: SessionFinishReason | null;
     winningPlayerId: string | null;
     rematchAcceptedPlayerIds: string[];
-    gamePlayers: ServerSessionParticipant[];
     isRatedGame: boolean;
 }
 
@@ -54,15 +61,10 @@ export interface PublicGameStatePayload {
 }
 
 export interface JoinSessionParams {
-    sessionId: string;
-    socketId: string;
-    client: SocketClientInfo;
-    user: AccountUserProfile;
-}
+    deviceId: string;
 
-export interface JoinSessionResult extends ClientGameParticipation {
-    participantRole: SessionParticipantRole;
-    isNewParticipant: boolean;
+    profile: AccountUserProfile | null;
+    displayName: string;
 }
 
 export interface CreateSessionParams {
@@ -101,18 +103,15 @@ export interface SessionManagerEventHandlers {
 export interface RematchRequestResult {
     status: 'pending' | 'ready';
     players: string[];
-}
-
-export interface RematchSessionResult {
-    sessionId: string;
-    session: SessionInfo;
+    spectators: string[];
 }
 
 export type ClientGameParticipation = {
-    session: SessionInfo,
-    participantId: string
+    session: SessionInfo
+    gameState?: PublicGameStatePayload
 
-    gameState?: PublicGameStatePayload,
+    participantId: string
+    participantRole: SessionParticipantRole
 };
 
 export function cloneGameOptions(gameOptions: LobbyOptions): LobbyOptions {
@@ -180,7 +179,6 @@ export function createGameSession(
         isRatedGame: false,
 
         gameId: '',
-        gamePlayers: [],
         gameState: createEmptyGameState(),
     };
 }

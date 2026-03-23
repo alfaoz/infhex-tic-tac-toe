@@ -33,6 +33,9 @@ export const zParticipantConnection = z.discriminatedUnion('status', [
     }),
     z.object({
         status: z.literal('orphaned')
+    }),
+    z.object({
+        status: z.literal('disconnected')
     })
 ]);
 export type ParticipantConnection = z.infer<typeof zParticipantConnection>;

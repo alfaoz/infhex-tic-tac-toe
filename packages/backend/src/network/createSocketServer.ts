@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
 import type { Logger } from 'pino';
@@ -11,7 +10,7 @@ import {
     zJoinSessionRequest,
     zPlaceCellRequest,
 } from '@ih3t/shared';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import { AuthService } from '../auth/authService';
 import { ROOT_LOGGER } from '../logger';
 import { MetricsTracker } from '../metrics/metricsTracker';
@@ -21,12 +20,12 @@ import { CorsConfiguration } from './cors';
 import { SessionError, SessionManager } from '../session/sessionManager';
 import type {
     ClientGameParticipation,
-    JoinSessionResult,
     ParticipantJoinedEvent,
     ParticipantLeftEvent,
     PublicGameStatePayload,
     SessionUpdatedEvent,
 } from '../session/types';
+import { Mutex } from 'async-mutex';
 
 type Participation = {
     sessionId: string,
@@ -96,6 +95,7 @@ export class SocketServerGateway {
             } catch (error: unknown) {
                 logSocketActionFailure(this.logger, 'connect', socket, error);
                 socket.emit('error', getSocketErrorMessage(error));
+                socket.disconnect();
                 return;
             }
         });
@@ -116,7 +116,7 @@ export class SocketServerGateway {
         const connectionId = `${clientInfo.deviceId}:${clientInfo.ephemeralClientId}`;
         if (this.connections.has(connectionId)) {
             const oldConnection = this.connections.get(connectionId)!;
-            const reclaimedParticipation = this.sessionManager.transferConnection(oldConnection.id, socket.id);
+            const reclaimedParticipation = this.sessionManager.participantTransferConnection(oldConnection.id, socket.id);
             if (reclaimedParticipation) {
                 this.putClientInGameState(socket, reclaimedParticipation)
             }
@@ -127,7 +127,7 @@ export class SocketServerGateway {
 
         /* reclaim a game by the device id */
         {
-            const reclaimedSession = this.sessionManager.reclaimSessionFromDeviceId(clientInfo.deviceId ?? "", socket.id);
+            const reclaimedSession = this.sessionManager.participantReclaimSessionFromDeviceId(clientInfo.deviceId ?? "", socket.id);
             if (reclaimedSession) {
                 this.putClientInGameState(socket, reclaimedSession);
             }
@@ -137,143 +137,152 @@ export class SocketServerGateway {
         socket.emit('lobby-list', this.sessionManager.listLobbyInfo());
         socket.emit('shutdown-updated', this.sessionManager.getShutdownState());
 
-        socket.on('join-session', async (request) => {
-            let sessionId: string;
-            try {
-                sessionId = zJoinSessionRequest.parse(request).sessionId;
-            } catch {
-                socket.emit('error', 'Invalid session request.');
-                return;
-            }
+        const participationMutex = new Mutex();
+        this.bindSocketHandler(socket, "join-session", zJoinSessionRequest, async request => {
+            await participationMutex.runExclusive(async () => {
+                const existingParticipation = this.sessionManager.findParticipationFromSocketId(socket.id);
+                if (existingParticipation?.session.id === request.sessionId) {
+                    const gameParticipation = this.sessionManager.assignParticipantSocket(
+                        existingParticipation.session,
+                        existingParticipation.participant.id,
+                        socket.id
+                    );
 
-            try {
-                const joinResult = await this.socketJoinSession(socket, sessionId);
-                if (joinResult.participantRole === 'player' && joinResult.isNewParticipant) {
-                    await this.sessionManager.activateSession(sessionId);
-                }
-
-                this.logger.info({
-                    event: 'socket.joined-session',
-                    socketId: socket.id,
-                    sessionId,
-                    role: joinResult.participantRole,
-                    state: joinResult.session.state,
-                    isNewParticipant: joinResult.isNewParticipant
-                }, 'Socket joined session');
-            } catch (error: unknown) {
-                logSocketActionFailure(this.logger, 'join-session', socket, error, { sessionId });
-                socket.emit('error', getSocketErrorMessage(error));
-            }
-        });
-
-        socket.on('leave-session', () => {
-            const participation = this.socketParticipations.get(socket.id);
-            if (!participation) {
-                return;
-            }
-
-            this.socketParticipations.delete(socket.id);
-            socket.leave(participation.sessionId);
-            this.sessionManager.leaveSession(participation.sessionId, participation.participantId, 'leave-session');
-        });
-
-        socket.on('surrender-session', () => {
-            try {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
-                this.sessionManager.surrenderSession(sessionId, participantId);
-            } catch (error: unknown) {
-                logSocketActionFailure(this.logger, 'surrender-session', socket, error);
-                socket.emit('error', getSocketErrorMessage(error));
-            }
-        });
-
-        socket.on('request-rematch', async () => {
-            try {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
-                const rematch = this.sessionManager.requestRematch(sessionId, participantId);
-                if (rematch.status !== 'ready') {
+                    this.putClientInGameState(socket, gameParticipation);
                     return;
                 }
 
-                const spectatorIds = this.getDistinctSpectatorIds(this.io!, sessionId, rematch.players);
-                const nextSession = this.sessionManager.createRematchSession(sessionId, spectatorIds);
-                for (const playerId of rematch.players) {
-                    const playerSocket = this.getSocketForSessionParticipant(this.io!, sessionId, playerId);
-                    if (!playerSocket) {
-                        continue;
-                    }
-
-                    this.socketParticipations.set(playerSocket.id, {
-                        sessionId: nextSession.sessionId,
-                        participantId: playerId
-                    });
-                    playerSocket.leave(sessionId);
-                    playerSocket.join(nextSession.sessionId);
-                    playerSocket.emit('session-joined', {
-                        sessionId: nextSession.sessionId,
-                        session: nextSession.session,
-                        participantId: playerId
-                    });
+                if (existingParticipation) {
+                    throw new SessionError('Socket already bound to a session');
                 }
 
-                for (const spectatorId of spectatorIds) {
-                    const spectatorSocket = this.getSocketForSessionParticipant(this.io!, sessionId, spectatorId);
-                    if (!spectatorSocket) {
-                        continue;
-                    }
+                const session = this.sessionManager.requireSession(request.sessionId);
+                const user = await this.authService.getCurrentUserFromSocket(socket);
+                const { participant, role } = await this.sessionManager.joinSession(session, {
+                    deviceId: clientInfo.deviceId,
 
-                    this.socketParticipations.set(spectatorSocket.id, {
-                        sessionId: nextSession.sessionId,
-                        participantId: spectatorId
-                    });
-                    spectatorSocket.leave(sessionId);
-                    spectatorSocket.join(nextSession.sessionId);
-                    spectatorSocket.emit('session-joined', {
-                        sessionId: nextSession.sessionId,
-                        session: nextSession.session,
-                        participantId: spectatorId
-                    });
-                }
-
-                await this.sessionManager.activateSession(nextSession.sessionId);
-            } catch (error: unknown) {
-                logSocketActionFailure(this.logger, 'request-rematch', socket, error);
-                socket.emit('error', getSocketErrorMessage(error));
-            }
-        });
-
-        socket.on('cancel-rematch', () => {
-            try {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
-                this.sessionManager.cancelRematch(sessionId, participantId);
-            } catch (error: unknown) {
-                logSocketActionFailure(this.logger, 'cancel-rematch', socket, error);
-                socket.emit('error', getSocketErrorMessage(error));
-            }
-        });
-
-        socket.on('place-cell', (data) => {
-            let parsedRequest: z.infer<typeof zPlaceCellRequest>;
-            try {
-                parsedRequest = zPlaceCellRequest.parse(data);
-            } catch {
-                socket.emit('error', 'Invalid move request.');
-                return;
-            }
-
-            try {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
-                this.sessionManager.placeCell(sessionId, participantId, parsedRequest.x, parsedRequest.y);
-            } catch (error: unknown) {
-                logSocketActionFailure(this.logger, 'place-cell', socket, error, {
-                    x: parsedRequest.x,
-                    y: parsedRequest.y
+                    profile: user,
+                    displayName: user?.username ?? clientInfo.deviceId.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase()
                 });
-                socket.emit('error', getSocketErrorMessage(error));
-            }
+
+                const gameParticipation = this.sessionManager.assignParticipantSocket(
+                    session,
+                    participant.id,
+                    socket.id
+                );
+
+                this.putClientInGameState(socket, gameParticipation);
+
+                this.logger.info(
+                    {
+                        event: 'socket.joined-session',
+                        socketId: socket.id,
+
+                        sessionId: session.id,
+                        participantId: participant.id,
+                        role,
+                    },
+                    'Socket joined session'
+                );
+            });
         });
 
-        socket.on('disconnect', () => {
+        this.bindSocketHandler(socket, "leave-session", z.any(), async () => {
+            await participationMutex.runExclusive(() => {
+                const participation = this.socketParticipations.get(socket.id);
+                if (!participation) {
+                    return;
+                }
+
+                this.socketParticipations.delete(socket.id);
+                socket.leave(participation.sessionId);
+
+                const session = this.sessionManager.getSession(participation.sessionId);
+                if (session) {
+                    this.sessionManager.leaveSession(
+                        session,
+                        participation.participantId,
+                        'leave-session'
+                    );
+                }
+
+                this.logger.info(
+                    {
+                        event: 'socket.left-session',
+                        socketId: socket.id,
+
+                        sessionId: participation.sessionId,
+                        participantId: participation.participantId,
+                    },
+                    'Socket left session'
+                );
+            })
+        });
+
+        this.bindSocketHandler(socket, "surrender-session", z.any(), async () => {
+            await participationMutex.runExclusive(() => {
+                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const session = this.sessionManager.requireSession(sessionId);
+
+                this.sessionManager.surrenderSession(session, participantId);
+            });
+        });
+
+        this.bindSocketHandler(socket, "request-rematch", z.any(), async () => {
+            await participationMutex.runExclusive(() => {
+                const { sessionId, participantId } = this.requireParticipation(socket.id);
+
+                {
+                    const session = this.sessionManager.requireSession(sessionId);
+                    const rematch = this.sessionManager.requestRematch(session, participantId);
+                    if (rematch.status !== 'ready') {
+                        return;
+                    }
+                }
+
+                const { rematchSession, socketMapping } = this.sessionManager.createRematchSession(sessionId);
+                for (const { participant } of this.sessionManager.getAllParticipations(rematchSession)) {
+                    const socketId = socketMapping[participant.id];
+                    if (!socketId) {
+                        continue
+                    }
+
+                    const socket = this.io?.sockets.sockets.get(socketId);
+                    if (!socket) {
+                        continue
+                    }
+
+                    socket.leave(sessionId);
+
+                    const gameParticipation = this.sessionManager.assignParticipantSocket(
+                        rematchSession,
+                        participant.id,
+                        socketId
+                    )
+                    this.putClientInGameState(socket, gameParticipation);
+                }
+            });
+        });
+
+        this.bindSocketHandler(socket, "cancel-rematch", z.any(), async () => {
+            await participationMutex.runExclusive(() => {
+                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const session = this.sessionManager.requireSession(sessionId);
+
+                this.sessionManager.cancelRematch(session, participantId);
+            });
+        });
+
+        this.bindSocketHandler(socket, "place-cell", zPlaceCellRequest, async request => {
+            await participationMutex.runExclusive(() => {
+                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const session = this.sessionManager.requireSession(sessionId);
+
+                this.sessionManager.placeCell(session, participantId, request.x, request.y);
+            });
+        });
+
+        socket.on('disconnect', async () => {
             if (this.connections.get(connectionId) === socket) {
                 /* connection terminated compeltely */
                 this.connections.delete(connectionId);
@@ -287,13 +296,16 @@ export class SocketServerGateway {
                  */
             }
 
+
             this.logger.debug({
                 event: 'socket.disconnected',
                 socketId: socket.id
             }, 'Socket disconnected');
 
-            this.socketParticipations.delete(socket.id);
-            this.sessionManager.handleSocketDisconnect(socket.id);
+            await participationMutex.runExclusive(() => {
+                this.socketParticipations.delete(socket.id);
+                this.sessionManager.handleSocketDisconnect(socket.id);
+            });
         });
 
         socket.emit("initialized");
@@ -358,81 +370,6 @@ export class SocketServerGateway {
         return participation;
     }
 
-    private getSocketForSessionParticipant(
-        io: Server<ClientToServerEvents, ServerToClientEvents>,
-        sessionId: string,
-        participantId: string
-    ): Socket<ClientToServerEvents, ServerToClientEvents> | null {
-        for (const [socketId, participation] of this.socketParticipations.entries()) {
-            if (participation.sessionId !== sessionId || participation.participantId !== participantId) {
-                continue;
-            }
-
-            return io.sockets.sockets.get(socketId) ?? null;
-        }
-
-        return null;
-    }
-
-    private getDistinctSpectatorIds(
-        io: Server<ClientToServerEvents, ServerToClientEvents>,
-        sessionId: string,
-        playerIds: string[]
-    ): string[] {
-        const spectatorIds = new Set<string>();
-        for (const roomSocketId of io.sockets.adapter.rooms.get(sessionId) ?? []) {
-            const roomSocket = io.sockets.sockets.get(roomSocketId);
-            if (!roomSocket) {
-                continue;
-            }
-
-            const roomParticipantId = this.getParticipation(roomSocket.id)?.participantId;
-            if (!roomParticipantId || playerIds.includes(roomParticipantId)) {
-                continue;
-            }
-
-            spectatorIds.add(roomParticipantId);
-        }
-
-        return [...spectatorIds];
-    }
-
-    private async socketJoinSession(
-        socket: Socket<ClientToServerEvents, ServerToClientEvents>,
-        sessionId: string,
-    ): Promise<JoinSessionResult> {
-        const user = await this.authService.getCurrentUserFromSocket(socket)
-            ?? this.createGuestUser(socket);
-
-        const joinResult = await this.sessionManager.joinSession({
-            sessionId,
-            socketId: socket.id,
-            client: parseSocketClientInfo(socket),
-            user,
-        });
-
-        this.putClientInGameState(socket, joinResult)
-        return joinResult;
-    }
-
-    private createGuestUser(
-        socket: Socket<ClientToServerEvents, ServerToClientEvents>
-    ): import('../auth/authRepository').AccountUserProfile {
-        const clientInfo = parseSocketClientInfo(socket);
-        const guestSeed = clientInfo.deviceId ?? randomUUID();
-        const fallbackSuffix = guestSeed.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || 'PLAY';
-
-        return {
-            id: `guest:${guestSeed}`,
-            username: `Guest ${fallbackSuffix}`,
-            email: null,
-            image: null,
-            role: 'user',
-            registeredAt: Date.now(),
-            lastActiveAt: Date.now()
-        };
-    }
-
     public async shutdownConnections() {
         this.clearLobbyListBroadcastTimer();
         this.io?.emit('error', 'Server shutdown');
@@ -493,6 +430,32 @@ export class SocketServerGateway {
             socket.emit('game-state', participation.gameState);
         }
     }
+
+    private bindSocketHandler<T extends keyof ClientToServerEvents, E = Parameters<ClientToServerEvents[T]>[0]>(
+        socket: ClientSocket,
+        eventType: T,
+        eventSchema: z.ZodType<E>,
+        callback: (event: E) => Promise<void>
+    ) {
+        socket.on(
+            eventType as any,
+            (rawEvent: unknown) => {
+                let event: E;
+                try {
+                    event = eventSchema.parse(rawEvent);
+                } catch (error: unknown) {
+                    logSocketActionFailure(this.logger, `${eventType}:validate`, socket, error, { payload: rawEvent });
+                    socket.emit('error', getSocketErrorMessage(error));
+                    return;
+                }
+
+                callback(event).catch(error => {
+                    logSocketActionFailure(this.logger, eventType, socket, error, { event });
+                    socket.emit('error', getSocketErrorMessage(error));
+                })
+            }
+        )
+    }
 }
 
 function getSocketErrorMessage(error: unknown): string {
@@ -514,22 +477,28 @@ function logSocketActionFailure(
     error: unknown,
     extra: Record<string, unknown> = {}
 ): void {
-    if (error instanceof SessionError) {
-        logger.warn({
-            event: 'socket.action.failed',
-            action,
-            socketId: socket.id,
-            message: error.message,
-            ...extra
-        }, 'Socket action rejected');
+    if (error instanceof SessionError || error instanceof ZodError) {
+        logger.warn(
+            {
+                event: 'socket.action.failed',
+                action,
+                socketId: socket.id,
+                message: error.message,
+                ...extra
+            },
+            'Socket action rejected'
+        );
         return;
     }
 
-    logger.error({
-        err: error,
-        event: 'socket.action.failed',
-        action,
-        socketId: socket.id,
-        ...extra
-    }, 'Socket action failed unexpectedly');
+    logger.error(
+        {
+            err: error,
+            event: 'socket.action.failed',
+            action,
+            socketId: socket.id,
+            ...extra
+        },
+        'Socket action failed unexpectedly'
+    );
 }

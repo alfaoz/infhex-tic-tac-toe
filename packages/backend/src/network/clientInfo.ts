@@ -3,10 +3,10 @@ import type { Socket } from 'socket.io';
 import { zSocketIOClientAuthPayload, type ClientToServerEvents, type ServerToClientEvents } from '@ih3t/shared';
 
 export interface RequestClientInfo {
-    deviceId: string | null;
-    ip: string | null;
-    userAgent: string | null;
-    origin: string | null;
+    deviceId: string;
+    ip: string;
+    userAgent: string;
+    origin: string;
     referer: string | null;
 }
 

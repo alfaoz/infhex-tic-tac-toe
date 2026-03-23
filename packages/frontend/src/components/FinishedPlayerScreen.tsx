@@ -100,7 +100,7 @@ function FinishedPlayerScreen({
     eloSummary?.currentElo ?? null,
     eloSummary?.previousElo ?? null
   )
-  const isRematchAvailable = session.players.length === 2 && session.winningPlayerId !== null
+  const isRematchAvailable = session.players.every(player => player.connection.status === "connected") && session.winningPlayerId !== null
   const isRematchRequestedByCurrentPlayer = session.rematchAcceptedPlayerIds.includes(currentPlayerId)
   const isRematchRequestedByOpponent = session.rematchAcceptedPlayerIds.some(
     (playerId) => playerId !== currentPlayerId

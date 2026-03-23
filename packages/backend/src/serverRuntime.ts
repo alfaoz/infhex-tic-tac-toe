@@ -206,9 +206,9 @@ export class ApplicationServer {
         this.stopCronJobs();
 
         this.scheduleCronJob({
-            name: "Lobby Cleanup",
-            time: '0 * * * * *',
-            callback: () => this.sessionManager.reconcileLobbySessions(),
+            name: "Session Tick",
+            time: '*/10 * * * * *',
+            callback: () => this.sessionManager.tickAllSessions(),
         });
 
         this.logger.info({
