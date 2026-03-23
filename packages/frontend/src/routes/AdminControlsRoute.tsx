@@ -7,16 +7,12 @@ import {
   scheduleShutdown,
   terminateAdminGame,
   updateAdminServerSettings
-} from '../adminClient'
+} from '../query/adminClient'
 import AdminControlsScreen from '../components/AdminControlsScreen'
-import { queryClient } from '../queryClient'
 import { useLiveGameStore } from '../liveGameStore'
-import {
-  queryKeys,
-  useQueryAccount,
-  useQueryAdminServerSettings,
-  useQueryAvailableSessions
-} from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
+import { useQueryAdminServerSettings } from '../query/adminClient'
+import { useQueryAvailableSessions } from '../query/sessionClient'
 
 function showSuccessToast(message: string) {
   toast.success(message, {
@@ -126,7 +122,6 @@ function AdminControlsRoute() {
     setIsSavingServerSettings(true)
     try {
       const response = await updateAdminServerSettings(parsedLimit)
-      queryClient.setQueryData(queryKeys.adminServerSettings, response)
       setMaxConcurrentGames(response.settings.maxConcurrentGames === null ? '' : String(response.settings.maxConcurrentGames))
       showSuccessToast(
         response.settings.maxConcurrentGames === null
@@ -150,10 +145,6 @@ function AdminControlsRoute() {
     setTerminatingSessionId(sessionId)
     try {
       await terminateAdminGame(sessionId)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.availableSessions }),
-        queryClient.invalidateQueries({ queryKey: ['admin'] })
-      ])
       showSuccessToast('Game terminated.')
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to terminate game.')

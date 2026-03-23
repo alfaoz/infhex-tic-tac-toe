@@ -1,16 +1,15 @@
 import type {
   ClientToServerEvents,
-  CreateSessionRequest,
-  CreateSessionResponse,
   ServerToClientEvents
 } from '@ih3t/shared'
 import { io, type Socket } from 'socket.io-client'
 import { toast } from 'react-toastify'
-import { fetchJson, getDeviceId, getSocketUrl } from './apiClient'
 import { APP_VERSION_HASH } from './appVersion'
 import { getActiveSessionId, useLiveGameStore } from './liveGameStore'
-import { queryClient } from './queryClient'
-import { queryKeys, sortLobbySessions } from './queryDefinitions'
+import { invalidateFinishedGames } from './query/finishedGamesClient'
+import { getDeviceId, getSocketUrl } from './query/apiClient'
+import { queryClient } from './query/queryClient'
+import { queryKeys, sortLobbySessions } from './query/queryDefinitions'
 import { buildSessionPath } from './routes/archiveRouteState'
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null
@@ -121,7 +120,7 @@ export function startLiveGameClient() {
 
     currentState.updateSession(data)
     if (data.session.state === 'finished') {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.finishedGames })
+      void invalidateFinishedGames()
     }
   })
 
@@ -175,24 +174,6 @@ export function stopLiveGameClient() {
   socket.disconnect()
   socket = null
   useLiveGameStore.getState().setDisconnected()
-}
-
-export async function hostGame(request: CreateSessionRequest): Promise<string | null> {
-  try {
-    const data = await fetchJson<CreateSessionResponse>('/api/sessions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(request)
-    })
-    return data.sessionId;
-  } catch (error) {
-    console.error('Failed to create session:', error)
-    showErrorToast(error instanceof Error ? error.message : 'Failed to create a session.')
-  }
-
-  return null;
 }
 
 export function joinGame(sessionId: string) {

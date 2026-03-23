@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import FinishedGamesScreen from '../components/FinishedGamesScreen'
-import { useQueryAccount, useQueryFinishedGames } from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
+import { useQueryFinishedGames } from '../query/finishedGamesClient'
 import { buildFinishedGamePath, buildFinishedGamesPath, useArchiveRouteState } from './archiveRouteState'
 
 function FinishedGamesRoute() {

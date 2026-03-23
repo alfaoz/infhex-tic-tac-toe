@@ -1,4 +1,4 @@
-import { getOrCreateDeviceId } from './deviceId'
+import { getOrCreateDeviceId } from '../deviceId'
 
 let cachedDeviceId: string | null = null
 
@@ -37,7 +37,7 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
       'X-Device-Id': deviceId,
       ...init?.headers
     }
-})
+  })
 
   if (!response.ok) {
     const data = await response.json().catch(() => null)

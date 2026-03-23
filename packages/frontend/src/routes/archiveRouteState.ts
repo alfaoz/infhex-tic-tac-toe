@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import type { FinishedGamesArchiveView } from '../queryDefinitions'
+import type { FinishedGamesArchiveView } from '../query/queryDefinitions'
 
 function parseArchivePage(searchParams: URLSearchParams) {
   const pageValue = searchParams.get('page')

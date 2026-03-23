@@ -1,6 +1,6 @@
 import type { FinishedGameSummary, FinishedGamesPage, SessionFinishReason } from '@ih3t/shared'
 import { getPlayerLabel, getPlayerTileColor } from './game-screen/gameBoardUtils'
-import type { FinishedGamesArchiveView } from '../queryDefinitions'
+import type { FinishedGamesArchiveView } from '../query/queryDefinitions'
 import PageCorpus from './PageCorpus'
 
 interface FinishedGamesScreenProps {

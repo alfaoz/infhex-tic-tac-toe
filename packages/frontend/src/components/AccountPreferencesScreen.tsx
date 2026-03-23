@@ -1,9 +1,8 @@
 import type { AccountPreferences, AccountProfile } from '@ih3t/shared'
 import { useState } from 'react'
 import { toast } from 'react-toastify'
-import { signInWithDiscord, updateAccountPreferences } from '../authClient'
-import { queryClient } from '../queryClient'
-import { queryKeys } from '../queryHooks'
+import { updateAccountPreferences } from '../query/accountClient'
+import { signInWithDiscord } from '../query/authClient'
 import PageCorpus from './PageCorpus'
 import React from 'react'
 
@@ -115,21 +114,17 @@ function AccountPreferencesScreen({
       return
     }
 
-    const previousPreferences = preferences
     const nextPreferences = {
       ...preferences,
       [key]: nextValue
     }
 
     setSavingPreferenceKey(key)
-    queryClient.setQueryData(queryKeys.accountPreferences, { preferences: nextPreferences })
 
     try {
-      const response = await updateAccountPreferences(nextPreferences)
-      queryClient.setQueryData(queryKeys.accountPreferences, response)
+      await updateAccountPreferences(nextPreferences)
     } catch (error) {
       console.error('Failed to update account preferences:', error)
-      queryClient.setQueryData(queryKeys.accountPreferences, { preferences: previousPreferences })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update account preferences.')
     } finally {
       setSavingPreferenceKey(currentKey => (currentKey === key ? null : currentKey))

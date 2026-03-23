@@ -1,8 +1,13 @@
 import { dehydrate, QueryClient } from '@tanstack/react-query'
+import {
+  FINISHED_GAMES_PAGE_SIZE,
+  queryKeys
+} from '@ih3t/shared'
 import type {
   AccountPreferencesResponse,
   AccountResponse,
   AccountStatisticsResponse,
+  FinishedGamesArchiveView,
   FinishedGameRecord,
   FinishedGamesPage,
   Leaderboard,
@@ -90,12 +95,12 @@ export class FrontendSsrRenderer {
       user: currentUser
     }
 
-    queryClient.setQueryData(['account'], accountResponse)
+    queryClient.setQueryData(queryKeys.account, accountResponse)
     if (currentUser) {
       const accountPreferencesResponse: AccountPreferencesResponse = {
         preferences: await this.dependencies.authService.getCurrentUserPreferences(req)
       }
-      queryClient.setQueryData(['account', 'preferences'], accountPreferencesResponse)
+      queryClient.setQueryData(queryKeys.accountPreferences, accountPreferencesResponse)
     }
 
     await this.prefetchRouteData(queryClient, requestUrl, currentUser?.id ?? null)
@@ -122,15 +127,12 @@ export class FrontendSsrRenderer {
     const path = requestUrl.pathname
 
     if (path === '/' || path === '/admin') {
-      queryClient.setQueryData(['sessions', 'available'], sortLobbySessions(this.dependencies.sessionManager.listLobbyInfo()))
+      queryClient.setQueryData(queryKeys.availableSessions, sortLobbySessions(this.dependencies.sessionManager.listLobbyInfo()))
     }
 
     if (path === '/leaderboard') {
       const leaderboard: Leaderboard = await this.dependencies.leaderboardService.getLeaderboardSnapshot(currentUserId)
-      queryClient.setQueryData(
-        ['leaderboard'],
-        leaderboard
-      )
+      queryClient.setQueryData(queryKeys.leaderboard, leaderboard)
     }
 
     const publicProfileMatch = path.match(/^\/profile\/([^/]+)$/)
@@ -146,25 +148,25 @@ export class FrontendSsrRenderer {
           statistics: await this.buildAccountStatistics(profileId)
         }
 
-        queryClient.setQueryData(['account', 'public', profileId], publicAccountResponse)
-        queryClient.setQueryData(['account', 'public', profileId, 'statistics'], accountStatisticsResponse)
+        queryClient.setQueryData(queryKeys.publicAccount(profileId), publicAccountResponse)
+        queryClient.setQueryData(queryKeys.publicAccountStatistics(profileId), accountStatisticsResponse)
       }
     }
 
     if (path === '/games' || path === '/account/games') {
-      const archiveView = path.startsWith('/account/games') ? 'mine' : 'all'
+      const archiveView: FinishedGamesArchiveView = path.startsWith('/account/games') ? 'mine' : 'all'
       const page = parsePositiveInteger(requestUrl.searchParams.get('page')) ?? 1
       const baseTimestamp = parsePositiveInteger(requestUrl.searchParams.get('at'))
 
       if (baseTimestamp !== null && (archiveView === 'all' || currentUserId)) {
         const finishedGamesPage: FinishedGamesPage = await this.dependencies.gameHistoryRepository.listFinishedGames({
           page,
-          pageSize: 20,
+          pageSize: FINISHED_GAMES_PAGE_SIZE,
           baseTimestamp,
           playerProfileId: archiveView === 'mine' ? currentUserId ?? undefined : undefined
         })
         queryClient.setQueryData(
-          ['finished-games', archiveView, page, 20, baseTimestamp],
+          queryKeys.finishedGamesPage(archiveView, page, FINISHED_GAMES_PAGE_SIZE, baseTimestamp),
           finishedGamesPage
         )
       }
@@ -176,10 +178,7 @@ export class FrontendSsrRenderer {
       const finishedGame = await this.dependencies.gameHistoryRepository.getFinishedGame(gameId)
       if (finishedGame) {
         const finishedGameRecord: FinishedGameRecord = finishedGame
-        queryClient.setQueryData(
-          ['finished-games', gameId],
-          finishedGameRecord
-        )
+        queryClient.setQueryData(queryKeys.finishedGame(gameId), finishedGameRecord)
       }
     }
 
@@ -193,10 +192,7 @@ export class FrontendSsrRenderer {
           name: sandboxPosition.name,
           gamePosition: sandboxPosition.gamePosition
         }
-        queryClient.setQueryData(
-          ['sandbox-position', positionId],
-          sandboxPositionResponse
-        )
+        queryClient.setQueryData(queryKeys.sandboxPosition(positionId), sandboxPositionResponse)
       }
     }
   }

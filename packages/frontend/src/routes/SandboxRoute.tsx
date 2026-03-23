@@ -3,7 +3,6 @@ import {
   cloneGameState,
   createStartedGameState,
   GameRuleError,
-  type CreateSandboxPositionResponse,
   type GameState,
   type SandboxGamePosition,
   type SandboxPlayerSlot,
@@ -14,7 +13,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { toast } from 'react-toastify'
-import { fetchJson } from '../apiClient'
 import GameBoardCanvas from '../components/game-screen/GameBoardCanvas'
 import useGameBoard from '../components/game-screen/useGameBoard'
 import SandboxHud from '../components/sandbox/SandboxHud'
@@ -23,7 +21,9 @@ import SandboxShareModal from '../components/sandbox/SandboxShareModal'
 import SandboxTurnIndicator from '../components/sandbox/SandboxTurnIndicator'
 import SandboxWelcomeModal from '../components/sandbox/SandboxWelcomeModal'
 import SandboxWinnerBanner from '../components/sandbox/SandboxWinnerBanner'
-import { fetchSandboxPosition, queryKeys, useQueryAccount, useQuerySandboxPosition } from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
+import { queryKeys } from '../query/queryDefinitions'
+import { createSandboxPosition, fetchSandboxPosition, useQuerySandboxPosition } from '../query/sandboxClient'
 import type { SandboxRouteState } from './sandboxRouteState'
 import { playTilePlacedSound } from '../soundEffects'
 
@@ -412,16 +412,7 @@ function SandboxRoute() {
     setShareModalError(null)
     setIsSharingPosition(true)
     try {
-      const response = await fetchJson<CreateSandboxPositionResponse>('/api/sandbox-positions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name,
-          gamePosition
-        })
-      })
+      const response = await createSandboxPosition(name, gamePosition)
 
       const nextSharedSnapshot = createSandboxSnapshot(gameState, gameHistory, response.name)
       const nextShareUrl = new URL(`/sandbox/${response.id}`, window.location.origin).toString()

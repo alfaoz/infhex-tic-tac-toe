@@ -1,5 +1,5 @@
 import AccountPreferencesScreen from '../components/AccountPreferencesScreen'
-import { useQueryAccount, useQueryAccountPreferences } from '../queryHooks'
+import { useQueryAccount, useQueryAccountPreferences } from '../query/accountClient'
 
 function AccountPreferencesRoute() {
   const accountQuery = useQueryAccount({ enabled: true })

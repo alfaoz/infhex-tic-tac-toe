@@ -1,5 +1,5 @@
 import { CHANGELOG_COMMIT_COUNT, CHANGELOG_DAYS, CHANGELOG_GENERATED_AT } from '@ih3t/shared'
-import { useQueryAccount, useQueryAccountPreferences } from '../queryHooks'
+import { useQueryAccount, useQueryAccountPreferences } from '../query/accountClient'
 import ChangelogScreen from '../components/ChangelogScreen'
 
 function ChangelogRoute() {

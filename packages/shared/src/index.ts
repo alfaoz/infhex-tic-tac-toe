@@ -4,6 +4,8 @@ export const DUMMY = 'Hello?';
 export const PLACE_CELL_HEX_RADIUS = 8;
 export type { ChangelogDay, ChangelogEntry, ChangelogEntryKind } from './changelogTypes';
 export { CHANGELOG_COMMIT_COUNT, CHANGELOG_DAYS, CHANGELOG_GENERATED_AT } from './generatedChangelog';
+export { FINISHED_GAMES_PAGE_SIZE, queryKeys } from './queryKeys';
+export type { FinishedGamesArchiveView } from './queryKeys';
 
 export interface HexCoordinate {
     x: number;

@@ -16,7 +16,7 @@ import {
   surrenderGame
 } from '../liveGameClient'
 import { useLiveGameStore } from '../liveGameStore'
-import { useQueryAccount, useQueryAccountPreferences } from '../queryHooks'
+import { useQueryAccount, useQueryAccountPreferences } from '../query/accountClient'
 import { buildFinishedGamePath } from './archiveRouteState'
 
 function isPlainLeftClick(event: MouseEvent<HTMLAnchorElement>) {

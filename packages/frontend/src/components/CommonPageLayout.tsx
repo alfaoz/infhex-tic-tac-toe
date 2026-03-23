@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { toast } from 'react-toastify'
-import { signInWithDiscord, signOutAccount } from '../authClient'
-import { useQueryAccount } from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
+import { signInWithDiscord, signOutAccount } from '../query/authClient'
 import AccountPicture from './AccountPicture'
 import AppErrorBoundary from './AppErrorBoundary'
 

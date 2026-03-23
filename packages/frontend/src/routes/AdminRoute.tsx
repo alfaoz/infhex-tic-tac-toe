@@ -1,6 +1,7 @@
 import { Navigate, useNavigate } from 'react-router'
 import AdminStatsScreen from '../components/AdminStatsScreen'
-import { useQueryAccount, useQueryAdminStats } from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
+import { useQueryAdminStats } from '../query/adminClient'
 
 function AdminRoute() {
   const navigate = useNavigate()

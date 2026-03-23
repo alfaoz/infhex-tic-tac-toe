@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createClientRouter } from "./router";
 import { getDehydratedStateFromWindow } from "./ssrState";
-import { queryClient } from "./queryClient";
+import { queryClient } from "./query/queryClient";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import App from "./App";
 

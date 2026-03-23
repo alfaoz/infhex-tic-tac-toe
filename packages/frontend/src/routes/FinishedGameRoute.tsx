@@ -1,6 +1,7 @@
 import { Navigate, useParams } from 'react-router'
 import FinishedGameReviewScreen from '../components/FinishedGameReviewScreen'
-import { useQueryAccount, useQueryAccountPreferences, useQueryFinishedGame } from '../queryHooks'
+import { useQueryAccount, useQueryAccountPreferences } from '../query/accountClient'
+import { useQueryFinishedGame } from '../query/finishedGamesClient'
 
 function FinishedGameRoute() {
   const { gameId } = useParams<{ gameId: string }>()

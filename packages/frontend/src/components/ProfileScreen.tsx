@@ -1,7 +1,7 @@
 import type { AccountStatistics, PublicAccountProfile } from '@ih3t/shared'
 import type { ReactNode } from 'react'
 import { toast } from 'react-toastify'
-import { signInWithDiscord } from '../authClient'
+import { signInWithDiscord } from '../query/authClient'
 import PageCorpus from './PageCorpus'
 
 function showErrorToast(message: string) {

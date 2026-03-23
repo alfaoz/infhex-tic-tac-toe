@@ -1,6 +1,6 @@
 import type { DehydratedState } from '@tanstack/react-query'
 import { renderToString } from 'react-dom/server'
-import { createQueryClient } from './queryClient'
+import { createQueryClient } from './query/queryClient'
 import { createServerRouter } from './router'
 import App from './App'
 

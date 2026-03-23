@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Leaderboard, LeaderboardPlacement, LeaderboardPlayer } from '@ih3t/shared'
 import { Link } from 'react-router'
-import { useQueryAccount } from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
 import { getInitialRenderTimestamp } from '../ssrState'
 
 export function formatDateTime(timestamp: number) {

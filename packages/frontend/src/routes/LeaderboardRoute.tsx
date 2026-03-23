@@ -1,5 +1,6 @@
 import LeaderboardScreen from '../components/LeaderboardScreen'
-import { useQueryAccount, useQueryLeaderboard } from '../queryHooks'
+import { useQueryAccount } from '../query/accountClient'
+import { useQueryLeaderboard } from '../query/leaderboardClient'
 
 function LeaderboardRoute() {
   const accountQuery = useQueryAccount({ enabled: true })

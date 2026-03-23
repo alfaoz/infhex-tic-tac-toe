@@ -1,10 +1,8 @@
 import type { AccountPreferences, AccountProfile, ChangelogDay, ChangelogEntryKind } from '@ih3t/shared'
 import { useState } from 'react'
 import { toast } from 'react-toastify'
-import { updateAccountPreferences } from '../authClient'
 import { countUnreadChangelogEntries, getLatestChangelogCommitAt, isUnreadChangelogEntry } from '../changelogState'
-import { queryKeys } from '../queryHooks'
-import { queryClient } from '../queryClient'
+import { updateAccountPreferences } from '../query/accountClient'
 import PageCorpus from './PageCorpus'
 
 const CHANGELOG_KIND_LABELS: Record<ChangelogEntryKind, string> = {
@@ -137,22 +135,18 @@ function ChangelogScreen({
       return
     }
 
-    const previousPreferences = preferences
     const nextPreferences: AccountPreferences = {
       ...preferences,
       changelogReadAt: latestCommitAt
     }
 
     setIsMarkingRead(true)
-    queryClient.setQueryData(queryKeys.accountPreferences, { preferences: nextPreferences })
 
     try {
-      const response = await updateAccountPreferences(nextPreferences)
-      queryClient.setQueryData(queryKeys.accountPreferences, response)
+      await updateAccountPreferences(nextPreferences)
       showSuccessToast('Marked new changelog entries as read.')
     } catch (error) {
       console.error('Failed to mark changelog updates as read:', error)
-      queryClient.setQueryData(queryKeys.accountPreferences, { preferences: previousPreferences })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update your changelog read status.')
     } finally {
       setIsMarkingRead(false)

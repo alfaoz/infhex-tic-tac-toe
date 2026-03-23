@@ -5,7 +5,7 @@ import {
   useQueryAccountStatistics,
   useQueryPublicAccount,
   useQueryPublicAccountStatistics
-} from '../queryHooks'
+} from '../query/accountClient'
 
 function ProfileRoute() {
   const { profileId } = useParams<{ profileId: string }>()

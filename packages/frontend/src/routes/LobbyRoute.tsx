@@ -1,11 +1,14 @@
 import { useEffect } from 'react'
 import { CHANGELOG_DAYS, type CreateSessionRequest } from '@ih3t/shared'
 import { useNavigate, useSearchParams } from 'react-router'
+import { toast } from 'react-toastify'
 import { countUnreadChangelogEntries } from '../changelogState'
 import LobbyScreen from '../components/LobbyScreen'
-import { hostGame, joinGame } from '../liveGameClient'
+import { joinGame } from '../liveGameClient'
 import { useLiveGameStore } from '../liveGameStore'
-import { useQueryAccount, useQueryAccountPreferences, useQueryAvailableSessions } from '../queryHooks'
+import { useQueryAccount, useQueryAccountPreferences } from '../query/accountClient'
+import { hostGame } from '../query/sessionClient'
+import { useQueryAvailableSessions } from '../query/sessionClient'
 import { buildFinishedGamesPath, buildSessionPath } from './archiveRouteState'
 
 function LobbyRoute() {
@@ -33,13 +36,21 @@ function LobbyRoute() {
 
   const createLobby = (request: CreateSessionRequest) => {
     void (async () => {
-      const sessionId = await hostGame(request)
-      if (!sessionId) {
-        return
-      }
+      try {
+        const sessionId = await hostGame(request)
+        if (!sessionId) {
+          return
+        }
 
-      /* join the game and the join method will update the screen to the lobby screen */
-      joinGame(sessionId)
+        /* join the game and the join method will update the screen to the lobby screen */
+        joinGame(sessionId)
+      } catch (error) {
+        console.error('Failed to create session:', error)
+        const message = error instanceof Error ? error.message : 'Failed to create a session.'
+        toast.error(message, {
+          toastId: `error:${message}`
+        })
+      }
     })()
   }
 
