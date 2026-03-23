@@ -15,6 +15,7 @@ interface LobbyScreenProps {
   unreadChangelogEntries: number
   onHostGame: (request: CreateSessionRequest) => void
   onJoinGame: (sessionId: string) => void
+  onOpenSandbox: () => void
   onViewFinishedGames: () => void
   onViewLeaderboard: () => void
   onViewChangelog: () => void
@@ -85,6 +86,7 @@ function LobbyScreen({
   unreadChangelogEntries,
   onHostGame,
   onJoinGame,
+  onOpenSandbox,
   onViewChangelog,
   onViewLeaderboard,
 }: Readonly<LobbyScreenProps>) {
@@ -160,6 +162,20 @@ function LobbyScreen({
               >
                 {shutdown ? 'Restart Pending' : 'Host Match'}
               </button>
+              <div className={"flex flex-row gap-4 lg:hidden"}>
+                <button
+                  onClick={onOpenSandbox}
+                  className="w-full rounded-full border border-emerald-300/25 bg-emerald-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:-translate-y-0.5 hover:bg-emerald-400/18 sm:px-7 sm:text-base sm:tracking-[0.18em]"
+                >
+                  Sandbox Mode
+                </button>
+                <button
+                  onClick={onViewLeaderboard}
+                  className="w-full block rounded-full border border-sky-300/25 bg-sky-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-400/20 sm:px-7 sm:text-base sm:tracking-[0.18em]"
+                >
+                  Leaderboard
+                </button>
+              </div>
               {showClientBadges && !isConnected && (
                 <div className="inline-flex items-center rounded-full border text-center border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm font-medium text-rose-100">
                   Not connected to server
@@ -170,12 +186,6 @@ function LobbyScreen({
                   New matches are disabled until the restart completes.
                 </div>
               )}
-              <button
-                onClick={onViewLeaderboard}
-                className="block lg:hidden rounded-full border border-sky-300/25 bg-sky-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-400/20 sm:px-7 sm:text-base sm:tracking-[0.18em]"
-              >
-                Leaderboard
-              </button>
             </div>
 
             {unreadChangelogEntries > 0 && (

@@ -56,6 +56,7 @@ function LobbyRoute() {
       liveSessions={availableSessionsQuery.data ?? []}
       onHostGame={createLobby}
       onJoinGame={joinLiveGame}
+      onOpenSandbox={() => void navigate('/sandbox')}
       onViewFinishedGames={() => void navigate(buildFinishedGamesPath(1, Date.now()))}
       onViewLeaderboard={() => void navigate('/leaderboard')}
       onViewChangelog={() => void navigate('/changelog')}

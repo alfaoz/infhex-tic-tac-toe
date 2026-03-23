@@ -1,13 +1,15 @@
-import type {
-    GameState,
-    LobbyInfo,
-    LobbyOptions,
-    ParticipantConnection,
-    SessionFinishReason,
-    SessionInfo,
-    SessionParticipant,
-    SessionParticipantRole,
-    ShutdownState,
+import {
+    cloneGameState,
+    createEmptyGameState,
+    type GameState,
+    type LobbyInfo,
+    type LobbyOptions,
+    type ParticipantConnection,
+    type SessionFinishReason,
+    type SessionInfo,
+    type SessionParticipant,
+    type SessionParticipantRole,
+    type ShutdownState,
 } from '@ih3t/shared';
 import type { RequestClientInfo, SocketClientInfo } from '../network/clientInfo';
 import type { AccountUserProfile } from '../auth/authRepository';
@@ -153,15 +155,7 @@ export function cloneStoredParticipants(participants: ServerSessionParticipant[]
 }
 
 export function cloneGameBoard(boardState: GameState): GameState {
-    return {
-        ...boardState,
-        cells: boardState.cells.map((cell) => ({ ...cell })),
-        highlightedCells: boardState.highlightedCells.map((cell) => ({ ...cell })),
-        playerTiles: Object.fromEntries(
-            Object.entries(boardState.playerTiles).map(([playerId, playerTileConfig]) => [playerId, { ...playerTileConfig }])
-        ),
-        playerTimeRemainingMs: { ...boardState.playerTimeRemainingMs }
-    };
+    return cloneGameState(boardState);
 }
 
 export function createGameSession(
@@ -187,14 +181,6 @@ export function createGameSession(
 
         gameId: '',
         gamePlayers: [],
-        gameState: {
-            cells: [],
-            highlightedCells: [],
-            playerTiles: {},
-            currentTurnPlayerId: null,
-            placementsRemaining: 0,
-            currentTurnExpiresAt: null,
-            playerTimeRemainingMs: {}
-        },
+        gameState: createEmptyGameState(),
     };
 }

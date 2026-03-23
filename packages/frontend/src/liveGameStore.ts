@@ -1,8 +1,10 @@
-import type {
-  GameState,
-  ServerToClientEvents,
-  SessionInfo,
-  ShutdownState
+import {
+  cloneGameState,
+  createEmptyGameState,
+  type GameState,
+  type ServerToClientEvents,
+  type SessionInfo,
+  type ShutdownState
 } from '@ih3t/shared'
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
@@ -50,30 +52,6 @@ interface LiveGameStoreState {
   updateSession: (payload: SessionUpdatedPayload) => void
   updateBoard: (payload: GameStatePayload) => void
   resetToLobby: () => void
-}
-
-function createEmptyGameState(): GameState {
-  return {
-    cells: [],
-    highlightedCells: [],
-    playerTiles: {},
-    currentTurnPlayerId: null,
-    placementsRemaining: 0,
-    currentTurnExpiresAt: null,
-    playerTimeRemainingMs: {}
-  }
-}
-
-function cloneGameState(gameState: GameState): GameState {
-  return {
-    ...gameState,
-    cells: gameState.cells.map(cell => ({ ...cell })),
-    highlightedCells: gameState.highlightedCells.map(cell => ({ ...cell })),
-    playerTiles: Object.fromEntries(
-      Object.entries(gameState.playerTiles).map(([playerId, playerTileConfig]) => [playerId, { ...playerTileConfig }])
-    ),
-    playerTimeRemainingMs: { ...gameState.playerTimeRemainingMs }
-  }
 }
 
 function cloneSessionInfo(session: SessionInfo): SessionInfo {

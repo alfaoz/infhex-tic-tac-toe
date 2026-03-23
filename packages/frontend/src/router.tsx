@@ -12,6 +12,7 @@ import FinishedGamesRoute from './routes/FinishedGamesRoute'
 import LeaderboardRoute from './routes/LeaderboardRoute'
 import LobbyRoute from './routes/LobbyRoute'
 import ProfileRoute from './routes/ProfileRoute'
+import SandboxRoute from './routes/SandboxRoute'
 import SessionRoute from './routes/SessionRoute'
 
 function AppShell() {
@@ -54,6 +55,7 @@ export function createAppRoutes() {
           <Route path="/admin/stats" element={<AdminRoute />} />
         </Route>
         <Route element={<CommonPageLayout limitWidth={false} />}>
+          <Route path="/sandbox" element={<SandboxRoute />} />
           <Route path="/session/:sessionId" element={<SessionRoute />} />
         </Route>
       </Route>

@@ -173,6 +173,7 @@ function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
 
           <div className="flex flex-row items-center gap-4 ml-auto">
             <nav className="hidden lg:flex flex-wrap items-center gap-2" aria-label="Primary">
+              <NavigationLink to="/sandbox" label="Sandbox" />
               <NavigationLink to="/games" label="Match History" />
               <NavigationLink to="/leaderboard" label="Leaderboard" />
             </nav>
@@ -299,6 +300,7 @@ function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
           <div className="border-t border-white/10 px-4 py-4 sm:px-6 lg:hidden absolute bg-slate-950 right-0 left-0 z-50 shadow-[0_18px_50px_rgba(2,6,23,0.45)] backdrop-blur-xl">
             <div className="mx-auto w-full max-w-[92rem] space-y-2 rounded-2xl p-2 shadow-[0_18px_50px_rgba(2,6,23,0.4)]">
               <MobileNavLink to="/games" label="Match History" onSelect={() => setIsMobileMenuOpen(false)} />
+              <MobileNavLink to="/sandbox" label="Sandbox" onSelect={() => setIsMobileMenuOpen(false)} />
               <MobileNavLink to="/leaderboard" label="Leaderboard" onSelect={() => setIsMobileMenuOpen(false)} />
             </div>
           </div>

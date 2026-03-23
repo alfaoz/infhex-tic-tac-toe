@@ -1,4 +1,4 @@
-import type { BoardState, CellOccupant, FinishedGameRecord } from '@ih3t/shared'
+import { createEmptyGameState, type BoardState, type CellOccupant, type FinishedGameRecord } from '@ih3t/shared'
 import { useEffect, useMemo, useState } from 'react'
 import GameBoardCanvas from '../game-screen/GameBoardCanvas'
 import useGameBoard from '../game-screen/useGameBoard'
@@ -109,17 +109,13 @@ function formatEloChange(eloChange: number) {
 
 function buildReplayBoardState(game: FinishedGameRecord, visibleMoveCount: number): BoardState {
   return {
+    ...createEmptyGameState(),
     cells: game.moves.slice(0, visibleMoveCount).map((move) => ({
       x: move.x,
       y: move.y,
       occupiedBy: move.playerId as CellOccupant
     })),
-    highlightedCells: [],
-    playerTiles: game.playerTiles,
-    currentTurnPlayerId: null,
-    placementsRemaining: 0,
-    currentTurnExpiresAt: null,
-    playerTimeRemainingMs: {}
+    playerTiles: game.playerTiles
   }
 }
 

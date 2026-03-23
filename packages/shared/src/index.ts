@@ -163,6 +163,13 @@ export const zBoardCell = z.object({
 });
 export type BoardCell = z.infer<typeof zBoardCell>;
 
+export class GameRuleError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'GameRuleError';
+    }
+}
+
 export function getCellKey(x: number, y: number): string {
     return `${x},${y}`;
 }
@@ -196,6 +203,177 @@ export type GameState = z.infer<typeof GameState>;
 
 export const zBoardState = GameState;
 export type BoardState = GameState;
+
+export interface ApplyGameMoveParams {
+    playerId: string;
+    x: number;
+    y: number;
+}
+
+export interface ApplyGameMoveResult {
+    turnCompleted: boolean;
+    winningPlayerId: string | null;
+}
+
+export function createEmptyGameState(): GameState {
+    return {
+        cells: [],
+        highlightedCells: [],
+        playerTiles: {},
+        currentTurnPlayerId: null,
+        placementsRemaining: 0,
+        currentTurnExpiresAt: null,
+        playerTimeRemainingMs: {}
+    };
+}
+
+export function cloneGameState(gameState: GameState): GameState {
+    return {
+        ...gameState,
+        cells: gameState.cells.map((cell) => ({ ...cell })),
+        highlightedCells: gameState.highlightedCells.map((cell) => ({ ...cell })),
+        playerTiles: Object.fromEntries(
+            Object.entries(gameState.playerTiles).map(([playerId, playerTileConfig]) => [playerId, { ...playerTileConfig }])
+        ),
+        playerTimeRemainingMs: { ...gameState.playerTimeRemainingMs }
+    };
+}
+
+export function createStartedGameState(playerIds: readonly string[]): GameState {
+    const gameState = createEmptyGameState();
+    initializeGameState(gameState, playerIds);
+    return gameState;
+}
+
+export function initializeGameState(gameState: GameState, playerIds: readonly string[]): void {
+    gameState.cells = [];
+    gameState.highlightedCells = [];
+    gameState.playerTiles = buildPlayerTileConfigMap(playerIds);
+    gameState.currentTurnExpiresAt = null;
+    gameState.playerTimeRemainingMs = {};
+    setCurrentTurn(gameState, playerIds[0] ?? null, 1);
+}
+
+export function getPublicGameState(gameState: GameState): GameState {
+    return {
+        ...cloneGameState(gameState),
+        cells: [...gameState.cells].sort((a, b) => {
+            if (a.y === b.y) {
+                return a.x - b.x;
+            }
+
+            return a.y - b.y;
+        })
+    };
+}
+
+export function applyGameMove(gameState: GameState, params: ApplyGameMoveParams): ApplyGameMoveResult {
+    const { playerId, x, y } = params;
+
+    if (gameState.currentTurnPlayerId !== playerId) {
+        throw new GameRuleError('It is not your turn');
+    }
+
+    if (gameState.placementsRemaining <= 0) {
+        throw new GameRuleError('No placements remaining this turn');
+    }
+
+    const cellKey = getCellKey(x, y);
+    const isOccupied = gameState.cells.some((cell) => getCellKey(cell.x, cell.y) === cellKey);
+    if (isOccupied) {
+        throw new GameRuleError('Cell is already occupied');
+    }
+
+    if (gameState.cells.length === 0 && (x !== 0 || y !== 0)) {
+        throw new GameRuleError('First placement must be at the origin');
+    }
+
+    if (!isCellWithinPlacementRadius(gameState.cells, { x, y })) {
+        throw new GameRuleError(`Cell must be within ${PLACE_CELL_HEX_RADIUS} hexes of an existing placed cell`);
+    }
+
+    const isFirstPlacementOfTurn = gameState.cells.length === 0 || gameState.placementsRemaining === 2;
+    const turnCompleted = gameState.placementsRemaining === 1;
+    const playerIds = Object.keys(gameState.playerTiles);
+
+    gameState.cells.push({
+        x,
+        y,
+        occupiedBy: zCellOccupant.parse(playerId)
+    });
+    gameState.highlightedCells = isFirstPlacementOfTurn
+        ? [{ x, y }]
+        : [...gameState.highlightedCells, { x, y }].slice(-2);
+    gameState.placementsRemaining -= 1;
+
+    if (hasSixInARow(gameState, playerId, x, y)) {
+        return {
+            turnCompleted,
+            winningPlayerId: playerId
+        };
+    }
+
+    if (turnCompleted) {
+        const currentPlayerIndex = playerIds.findIndex((existingPlayerId) => existingPlayerId === playerId);
+        const nextPlayerIndex = currentPlayerIndex === 0 ? 1 : 0;
+        setCurrentTurn(gameState, playerIds[nextPlayerIndex] ?? playerId, 2);
+    }
+
+    return {
+        turnCompleted,
+        winningPlayerId: null
+    };
+}
+
+function setCurrentTurn(gameState: GameState, playerId: string | null, placementsRemaining: number): void {
+    gameState.currentTurnPlayerId = playerId;
+    gameState.placementsRemaining = playerId ? placementsRemaining : 0;
+    if (!playerId) {
+        gameState.currentTurnExpiresAt = null;
+    }
+}
+
+function hasSixInARow(gameState: GameState, playerId: string, x: number, y: number): boolean {
+    const occupiedCells = new Set(
+        gameState.cells
+            .filter((cell) => cell.occupiedBy === playerId)
+            .map((cell) => getCellKey(cell.x, cell.y))
+    );
+    const directions: Array<[number, number]> = [
+        [1, 0],
+        [0, 1],
+        [1, -1]
+    ];
+
+    return directions.some(([directionX, directionY]) => {
+        const connectedCount =
+            1 +
+            countConnectedTiles(occupiedCells, x, y, directionX, directionY) +
+            countConnectedTiles(occupiedCells, x, y, -directionX, -directionY);
+
+        return connectedCount >= 6;
+    });
+}
+
+function countConnectedTiles(
+    occupiedCells: Set<string>,
+    startX: number,
+    startY: number,
+    directionX: number,
+    directionY: number
+): number {
+    let count = 0;
+    let currentX = startX + directionX;
+    let currentY = startY + directionY;
+
+    while (occupiedCells.has(getCellKey(currentX, currentY))) {
+        count += 1;
+        currentX += directionX;
+        currentY += directionY;
+    }
+
+    return count;
+}
 
 export const zSessionParticipant = z.object({
     id: zIdentifier,
