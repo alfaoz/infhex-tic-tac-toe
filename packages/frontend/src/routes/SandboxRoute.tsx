@@ -12,6 +12,7 @@ import GameBoardCanvas from '../components/game-screen/GameBoardCanvas'
 import useGameBoard from '../components/game-screen/useGameBoard'
 import SandboxHud from '../components/sandbox/SandboxHud'
 import SandboxTurnIndicator from '../components/sandbox/SandboxTurnIndicator'
+import SandboxWelcomeModal from '../components/sandbox/SandboxWelcomeModal'
 import SandboxWinnerBanner from '../components/sandbox/SandboxWinnerBanner'
 
 const SANDBOX_PLAYERS: SessionParticipant[] = [
@@ -40,6 +41,7 @@ function createSandboxGameState() {
 function SandboxRoute() {
   const [gameState, setGameState] = useState(() => createSandboxGameState())
   const [winnerId, setWinnerId] = useState<string | null>(null)
+  const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState(true)
   const [isWinnerBannerVisible, setIsWinnerBannerVisible] = useState(false)
   const previousCellCountRef = useRef(gameState.cells.length)
 
@@ -87,7 +89,7 @@ function SandboxRoute() {
     boardState: gameState,
     highlightedCells: gameState.highlightedCells,
     localPlayerId,
-    interactionEnabled: !isWinnerBannerVisible,
+    interactionEnabled: !isWelcomeModalVisible && !isWinnerBannerVisible,
     onPlaceCell: winnerId === null ? handlePlaceCell : undefined
   })
 
@@ -118,26 +120,37 @@ function SandboxRoute() {
 
       <div className="pointer-events-none absolute inset-0">
         <div className="flex h-full flex-col justify-between gap-4">
-          <SandboxTurnIndicator
-            players={SANDBOX_PLAYERS}
-            gameState={gameState}
-            winnerId={winnerId}
+          {!isWelcomeModalVisible && (
+            <SandboxTurnIndicator
+              players={SANDBOX_PLAYERS}
+              gameState={gameState}
+              winnerId={winnerId}
+            />
+          )}
+
+          {!isWelcomeModalVisible && (
+            <SandboxWinnerBanner
+              players={SANDBOX_PLAYERS}
+              gameState={gameState}
+              winnerId={isWinnerBannerVisible ? winnerId : null}
+              onNewBoard={restartSandbox}
+              onExploreBoard={() => setIsWinnerBannerVisible(false)}
+            />
+          )}
+
+          <SandboxWelcomeModal
+            isOpen={isWelcomeModalVisible}
+            onClose={() => setIsWelcomeModalVisible(false)}
           />
 
-          <SandboxWinnerBanner
-            players={SANDBOX_PLAYERS}
-            gameState={gameState}
-            winnerId={isWinnerBannerVisible ? winnerId : null}
-            onNewBoard={restartSandbox}
-            onExploreBoard={() => setIsWinnerBannerVisible(false)}
-          />
-
-          <SandboxHud
-            occupiedCellCount={gameState.cells.length}
-            renderableCellCount={renderableCellCount}
-            onNewBoard={restartSandbox}
-            onResetView={resetView}
-          />
+          {!isWelcomeModalVisible && (
+            <SandboxHud
+              occupiedCellCount={gameState.cells.length}
+              renderableCellCount={renderableCellCount}
+              onNewBoard={restartSandbox}
+              onResetView={resetView}
+            />
+          )}
         </div>
       </div>
     </div>
