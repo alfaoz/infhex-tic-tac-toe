@@ -112,11 +112,17 @@ function restoreSandboxPosition(gamePosition: SandboxGamePosition) {
 
   for (const cell of orderedCells) {
     gameHistory.push(cloneGameState(nextGameState))
-    applyGameMove(nextGameState, {
+    const moveResult = applyGameMove(nextGameState, {
       playerId: getSandboxPlayerId(cell.player),
       x: cell.x,
       y: cell.y
     })
+
+    if (moveResult.winningPlayerId) {
+      nextGameState.currentTurnPlayerId = getSandboxPlayerId(cell.player === 'player-1' ? 'player-2' : 'player-1')
+      nextGameState.placementsRemaining = 2
+      nextGameState.currentTurnExpiresAt = null
+    }
   }
 
   const expectedCurrentTurnPlayerId = getSandboxPlayerId(gamePosition.currentTurnPlayer)
@@ -213,7 +219,11 @@ function SandboxRoute() {
     onPlaceCell: winnerId === null ? handlePlaceCell : undefined
   })
 
-  function applySandboxPosition(positionName: string, gamePosition: SandboxGamePosition, positionId: string | null) {
+  function applySandboxPosition(
+    positionName: string,
+    gamePosition: SandboxGamePosition,
+    positionId: string | null
+  ) {
     const { gameState: nextGameState, gameHistory: nextGameHistory } = restoreSandboxPosition(gamePosition)
     const nextLoadedSnapshot = createSandboxSnapshot(nextGameState, nextGameHistory, positionName)
 

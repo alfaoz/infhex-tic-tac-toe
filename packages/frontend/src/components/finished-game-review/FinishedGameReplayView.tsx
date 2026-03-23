@@ -1,4 +1,12 @@
-import { createEmptyGameState, type BoardState, type CellOccupant, type FinishedGameRecord, type SandboxGamePosition } from '@ih3t/shared'
+import {
+  applyGameMove,
+  createEmptyGameState,
+  createStartedGameState,
+  type BoardState,
+  type CellOccupant,
+  type FinishedGameRecord,
+  type SandboxGamePosition
+} from '@ih3t/shared'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import GameBoardCanvas from '../game-screen/GameBoardCanvas'
@@ -129,22 +137,46 @@ function buildReplaySandboxPosition(game: FinishedGameRecord, visibleMoveCount: 
   }
 
   const visibleMoves = game.moves.slice(0, visibleMoveCount)
-  const gamePosition: SandboxGamePosition = visibleMoves.length === 0
-    ? {
-      cells: [],
-      currentTurnPlayer: 'player-1',
-      placementsRemaining: 1
+  const replayPlayerIds = ['replay-player-1', 'replay-player-2'] as const
+  const replayGameState = createStartedGameState(replayPlayerIds)
+
+  for (const move of visibleMoves) {
+    const replayPlayerId = move.playerId === firstPlayer
+      ? replayPlayerIds[0]
+      : move.playerId === secondPlayer
+        ? replayPlayerIds[1]
+        : null
+    if (!replayPlayerId) {
+      return null
     }
-    : {
-      cells: visibleMoves.map((move, index) => ({
-        x: move.x,
-        y: move.y,
-        player: move.playerId === firstPlayer ? 'player-1' : 'player-2',
-        moveId: index + 1
-      })),
-      currentTurnPlayer: Math.floor((visibleMoves.length - 1) / 2) % 2 === 0 ? 'player-2' : 'player-1',
-      placementsRemaining: 2 - ((visibleMoves.length - 1) % 2)
+
+    const moveResult = applyGameMove(replayGameState, {
+      playerId: replayPlayerId,
+      x: move.x,
+      y: move.y
+    })
+
+    if (moveResult.winningPlayerId) {
+      replayGameState.currentTurnPlayerId = replayPlayerId === replayPlayerIds[0]
+        ? replayPlayerIds[1]
+        : replayPlayerIds[0]
+      replayGameState.placementsRemaining = 2
+      replayGameState.currentTurnExpiresAt = null
     }
+  }
+
+  const currentTurnPlayer = replayGameState.currentTurnPlayerId === replayPlayerIds[1] ? 'player-2' : 'player-1'
+  const placementsRemaining = Math.max(1, replayGameState.placementsRemaining)
+  const gamePosition: SandboxGamePosition = {
+    cells: visibleMoves.map((move, index) => ({
+      x: move.x,
+      y: move.y,
+      player: move.playerId === firstPlayer ? 'player-1' : 'player-2',
+      moveId: index + 1
+    })),
+    currentTurnPlayer,
+    placementsRemaining
+  }
 
   const moveLabel = visibleMoveCount === 0
     ? 'Opening Position'
