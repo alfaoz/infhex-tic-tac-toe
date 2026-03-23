@@ -14,6 +14,7 @@ import { HttpApplication } from '../network/createHttpApp';
 import { SocketServerGateway } from '../network/createSocketServer';
 import { ApiRouter } from '../network/rest/createApiRouter';
 import { ServerSettingsRepository } from '../persistence/serverSettingsRepository';
+import { DatabaseMigrationRunner } from '../persistence/databaseMigrationRunner';
 import { GameHistoryRepository } from '../persistence/gameHistoryRepository';
 import { MongoDatabase } from '../persistence/mongoClient';
 import { MetricsRepository } from '../persistence/metricsRepository';
@@ -36,6 +37,7 @@ export function createAppContainer(): DependencyContainer {
     appContainer.registerSingleton(GameSimulation);
     appContainer.registerSingleton(GameTimeControlManager);
     appContainer.registerSingleton(MongoDatabase);
+    appContainer.registerSingleton(DatabaseMigrationRunner);
     appContainer.registerSingleton(AuthRepository);
     appContainer.registerSingleton(AuthService);
     appContainer.registerSingleton(EloRepository);

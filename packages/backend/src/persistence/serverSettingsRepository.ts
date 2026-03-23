@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import { inject, injectable } from 'tsyringe';
+import type { Collection } from 'mongodb';
 import {
     DEFAULT_SERVER_SETTINGS,
     type ServerSettings,
@@ -8,9 +9,9 @@ import {
 import { z } from 'zod';
 import type { AccountUserProfile } from '../auth/authRepository';
 import { ROOT_LOGGER } from '../logger';
+import { SERVER_SETTINGS_COLLECTION_NAME } from './mongoCollections';
 import { MongoDatabase } from './mongoClient';
 
-const COLLECTION_NAME = 'serverSettings';
 const SERVER_SETTING_KEYS = Object.keys(DEFAULT_SERVER_SETTINGS) as Array<keyof ServerSettings>;
 
 const zServerSettingDocument = z.object({
@@ -24,6 +25,7 @@ type ServerSettingDocument = z.infer<typeof zServerSettingDocument>;
 @injectable()
 export class ServerSettingsRepository {
     private readonly logger: Logger;
+    private collectionPromise: Promise<Collection<ServerSettingDocument>> | null = null;
 
     constructor(
         @inject(ROOT_LOGGER) rootLogger: Logger,
@@ -85,10 +87,20 @@ export class ServerSettingsRepository {
     }
 
     private async getCollection() {
-        const database = await this.mongoDatabase.getDatabase();
-        const collection = database.collection<ServerSettingDocument>(COLLECTION_NAME);
-        await collection.createIndex({ key: 1 }, { unique: true });
-        return collection;
+        if (this.collectionPromise) {
+            return this.collectionPromise;
+        }
+
+        this.collectionPromise = (async () => {
+            const database = await this.mongoDatabase.getDatabase();
+            return database.collection<ServerSettingDocument>(SERVER_SETTINGS_COLLECTION_NAME);
+        })().catch((error: unknown) => {
+            this.collectionPromise = null;
+            this.logger.error({ err: error, event: 'server-settings.init.failed' }, 'Failed to initialize server settings collection');
+            throw error;
+        });
+
+        return this.collectionPromise;
     }
 
     private parseServerSettingKey(value: string): keyof ServerSettings | null {

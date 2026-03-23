@@ -14,6 +14,12 @@ import type { Logger } from 'pino';
 import { Collection, ObjectId, type Document } from 'mongodb';
 import { inject, injectable } from 'tsyringe';
 import { ROOT_LOGGER } from '../logger';
+import {
+    AUTH_ACCOUNTS_COLLECTION_NAME,
+    AUTH_SESSIONS_COLLECTION_NAME,
+    AUTH_USERS_COLLECTION_NAME,
+    AUTH_VERIFICATION_TOKENS_COLLECTION_NAME,
+} from '../persistence/mongoCollections';
 import { MongoDatabase } from '../persistence/mongoClient';
 
 interface AuthUserDocument extends Document {
@@ -77,11 +83,6 @@ export interface AccountUserProfile {
     registeredAt: number;
     lastActiveAt: number;
 }
-
-const USERS_COLLECTION_NAME = process.env.MONGODB_AUTH_USERS_COLLECTION ?? 'users';
-const ACCOUNTS_COLLECTION_NAME = process.env.MONGODB_AUTH_ACCOUNTS_COLLECTION ?? 'accounts';
-const SESSIONS_COLLECTION_NAME = process.env.MONGODB_AUTH_SESSIONS_COLLECTION ?? 'sessions';
-const VERIFICATION_TOKENS_COLLECTION_NAME = process.env.MONGODB_AUTH_VERIFICATION_TOKENS_COLLECTION ?? 'verificationTokens';
 
 @injectable()
 export class AuthRepository implements Adapter {
@@ -443,12 +444,7 @@ export class AuthRepository implements Adapter {
 
         this.usersCollectionPromise = (async () => {
             const database = await this.mongoDatabase.getDatabase();
-            const collection = database.collection<AuthUserDocument>(USERS_COLLECTION_NAME);
-            await collection.createIndex({ email: 1 }, { unique: true, sparse: true });
-            await collection.createIndex({ registeredAt: -1 });
-            await collection.createIndex({ lastActiveAt: -1 });
-            await this.migrateExistingUsers(collection);
-            return collection;
+            return database.collection<AuthUserDocument>(AUTH_USERS_COLLECTION_NAME);
         })().catch((error: unknown) => {
             this.usersCollectionPromise = null;
             this.logger.error({ err: error, event: 'auth.users.init.failed' }, 'Failed to initialize auth users collection');
@@ -465,10 +461,7 @@ export class AuthRepository implements Adapter {
 
         this.accountsCollectionPromise = (async () => {
             const database = await this.mongoDatabase.getDatabase();
-            const collection = database.collection<AuthAccountDocument>(ACCOUNTS_COLLECTION_NAME);
-            await collection.createIndex({ provider: 1, providerAccountId: 1 }, { unique: true });
-            await collection.createIndex({ userId: 1, provider: 1 });
-            return collection;
+            return database.collection<AuthAccountDocument>(AUTH_ACCOUNTS_COLLECTION_NAME);
         })().catch((error: unknown) => {
             this.accountsCollectionPromise = null;
             this.logger.error({ err: error, event: 'auth.accounts.init.failed' }, 'Failed to initialize auth accounts collection');
@@ -485,11 +478,7 @@ export class AuthRepository implements Adapter {
 
         this.sessionsCollectionPromise = (async () => {
             const database = await this.mongoDatabase.getDatabase();
-            const collection = database.collection<AuthSessionDocument>(SESSIONS_COLLECTION_NAME);
-            await collection.createIndex({ sessionToken: 1 }, { unique: true });
-            await collection.createIndex({ userId: 1, expires: 1 });
-            await collection.createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
-            return collection;
+            return database.collection<AuthSessionDocument>(AUTH_SESSIONS_COLLECTION_NAME);
         })().catch((error: unknown) => {
             this.sessionsCollectionPromise = null;
             this.logger.error({ err: error, event: 'auth.sessions.init.failed' }, 'Failed to initialize auth sessions collection');
@@ -506,10 +495,7 @@ export class AuthRepository implements Adapter {
 
         this.verificationTokensCollectionPromise = (async () => {
             const database = await this.mongoDatabase.getDatabase();
-            const collection = database.collection<AuthVerificationTokenDocument>(VERIFICATION_TOKENS_COLLECTION_NAME);
-            await collection.createIndex({ identifier: 1, token: 1 }, { unique: true });
-            await collection.createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
-            return collection;
+            return database.collection<AuthVerificationTokenDocument>(AUTH_VERIFICATION_TOKENS_COLLECTION_NAME);
         })().catch((error: unknown) => {
             this.verificationTokensCollectionPromise = null;
             this.logger.error({ err: error, event: 'auth.verification-tokens.init.failed' }, 'Failed to initialize auth verification token collection');
@@ -525,42 +511,6 @@ export class AuthRepository implements Adapter {
         }
 
         return new ObjectId(value);
-    }
-
-    private async migrateExistingUsers(collection: Collection<AuthUserDocument>): Promise<void> {
-        const legacyDocuments = await collection.find({
-            $or: [
-                { registeredAt: { $exists: false } },
-                { lastActiveAt: { $exists: false } },
-            ]
-        } as Document).toArray();
-
-        if (legacyDocuments.length === 0) {
-            return;
-        }
-
-        await collection.bulkWrite(
-            legacyDocuments.map((document) => {
-                const registeredAt = this.resolveRegisteredAt(document);
-                return {
-                    updateOne: {
-                        filter: { _id: document._id },
-                        update: {
-                            $set: {
-                                registeredAt,
-                                lastActiveAt: this.resolveLastActiveAt(document, registeredAt),
-                            }
-                        }
-                    }
-                };
-            }),
-            { ordered: false }
-        );
-
-        this.logger.info({
-            event: 'auth.users.migration.complete',
-            migratedUsers: legacyDocuments.length
-        }, 'Migrated legacy auth users with missing account timestamps');
     }
 
     private mapUserDocument(document: AuthUserDocument): StoredAdapterUser {

@@ -2,6 +2,7 @@ import type { Logger } from 'pino';
 import { Collection, ObjectId, type Document } from 'mongodb';
 import { inject, injectable } from 'tsyringe';
 import { ROOT_LOGGER } from '../logger';
+import { AUTH_USERS_COLLECTION_NAME } from '../persistence/mongoCollections';
 import { MongoDatabase } from '../persistence/mongoClient';
 
 interface EloUserDocument extends Document {
@@ -25,8 +26,6 @@ export interface EloLeaderboardPlacement extends EloLeaderboardPlayer {
     rank: number;
 }
 
-const USERS_COLLECTION_NAME = process.env.MONGODB_AUTH_USERS_COLLECTION ?? 'users';
-const MONGO_DB_NAME = process.env.MONGODB_DB_NAME ?? 'ih3t';
 const DEFAULT_PLAYER_ELO = 1000;
 const MINIMUM_PLAYER_ELO = 100;
 
@@ -184,24 +183,7 @@ export class EloRepository {
 
         this.usersCollectionPromise = (async () => {
             const database = await this.mongoDatabase.getDatabase();
-            const collection = database.collection<EloUserDocument>(USERS_COLLECTION_NAME);
-            await collection.createIndex(
-                { elo: -1, ratedGamesPlayed: -1, _id: 1 },
-                {
-                    partialFilterExpression: {
-                        ratedGamesPlayed: { $gt: 0 }
-                    },
-                    name: "elo_-1_ratedGamesPlayed_-1__id_1_2"
-                }
-            );
-
-            this.logger.info({
-                event: 'elo.users.ready',
-                database: MONGO_DB_NAME,
-                collection: USERS_COLLECTION_NAME
-            }, 'ELO users collection ready');
-
-            return collection;
+            return database.collection<EloUserDocument>(AUTH_USERS_COLLECTION_NAME);
         })().catch((error: unknown) => {
             this.usersCollectionPromise = null;
             this.logger.error({ err: error, event: 'elo.users.init.failed' }, 'Failed to initialize elo users collection');

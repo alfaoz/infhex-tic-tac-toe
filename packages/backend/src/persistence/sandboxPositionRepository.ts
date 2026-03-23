@@ -10,9 +10,8 @@ import {
     zSandboxPositionName,
 } from '@ih3t/shared';
 import { ROOT_LOGGER } from '../logger';
+import { SANDBOX_POSITIONS_COLLECTION_NAME } from './mongoCollections';
 import { MongoDatabase } from './mongoClient';
-
-const sandboxPositionsCollectionName = process.env.MONGODB_SANDBOX_POSITIONS_COLLECTION ?? 'sandboxPositions';
 
 const zSandboxPositionDocument = z.object({
     id: zSandboxPositionId,
@@ -111,11 +110,7 @@ export class SandboxPositionRepository {
 
         this.collectionPromise = (async () => {
             const database = await this.mongoDatabase.getDatabase();
-            const collection = database.collection<SandboxPositionDocument>(sandboxPositionsCollectionName);
-            await collection.createIndex({ id: 1 }, { unique: true });
-            await collection.createIndex({ createdBy: 1, createdAt: -1 });
-            await collection.createIndex({ createdAt: -1 });
-            return collection;
+            return database.collection<SandboxPositionDocument>(SANDBOX_POSITIONS_COLLECTION_NAME);
         })().catch((error: unknown) => {
             this.collectionPromise = null;
             this.logger.error({ err: error, event: 'sandbox-positions.init.failed' }, 'Failed to initialize sandbox positions collection');

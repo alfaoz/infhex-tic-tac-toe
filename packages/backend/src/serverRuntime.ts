@@ -11,6 +11,7 @@ import { EloRepository } from './elo/eloRepository';
 import { ROOT_LOGGER } from './logger';
 import { HttpApplication } from './network/createHttpApp';
 import { SocketServerGateway } from './network/createSocketServer';
+import { DatabaseMigrationRunner } from './persistence/databaseMigrationRunner';
 import { MongoDatabase } from './persistence/mongoClient';
 import { SessionManager } from './session/sessionManager';
 import { GameTimeControlManager } from './simulation/gameTimeControlManager';
@@ -30,6 +31,7 @@ export class ApplicationServer {
         @inject(HttpApplication) httpApplication: HttpApplication,
         @inject(SocketServerGateway) private readonly socketServerGateway: SocketServerGateway,
         @inject(GameTimeControlManager) private readonly timeControl: GameTimeControlManager,
+        @inject(DatabaseMigrationRunner) private readonly databaseMigrationRunner: DatabaseMigrationRunner,
         @inject(MongoDatabase) private readonly mongoDatabase: MongoDatabase,
         @inject(EloRepository) private readonly eloRepository: EloRepository,
         @inject(ServerSettingsService) private readonly serverSettingsService: ServerSettingsService,
@@ -62,7 +64,7 @@ export class ApplicationServer {
             port: this.serverConfig.port
         }, 'Starting server');
 
-        await this.mongoDatabase.getDatabase();
+        await this.databaseMigrationRunner.run();
         await this.eloRepository.initialize();
         await this.serverSettingsService.initialize();
 
