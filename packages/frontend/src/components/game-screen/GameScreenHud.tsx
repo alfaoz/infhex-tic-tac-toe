@@ -4,11 +4,15 @@ import GameHudShell from './GameHudShell'
 import { ShutdownTimer } from './ShutdownTimer'
 import HudInfoBlock from './HudInfoBlock'
 import { formatTimeControl } from '../../utils/gameTimeControl'
+import { NavLink } from 'react-router'
 
 export type HudPlayerInfo = {
   playerId: string,
+  profileId: string | null,
+
   displayColor: string,
   displayName: string,
+
   isConnected: boolean,
 }
 
@@ -105,13 +109,20 @@ function GameScreenHud({
         </HudInfoBlock>
 
         <HudInfoBlock label="Players">
-          {players.map(({ playerId, displayColor, displayName, isConnected }) => (
+          {players.map(({ playerId, profileId, displayColor, displayName, isConnected }) => (
             <div key={playerId} className="mt-1 flex items-center gap-2.5 text-white">
               <span
                 className="h-3.5 w-3.5 rounded-full border border-white/20 flex-shrink-0"
                 style={{ backgroundColor: displayColor }}
               />
-              <span>{displayName}</span>
+              {profileId ? (
+                <NavLink to={`/profile/${profileId}`}>
+                  {displayName}
+                </NavLink>
+              ) : (
+                <span>{displayName}</span>
+              )}
+
               {!isConnected && (
                 <span
                   title={`${displayName} is offline`}

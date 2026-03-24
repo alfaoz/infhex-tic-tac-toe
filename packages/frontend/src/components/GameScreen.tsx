@@ -11,152 +11,155 @@ import useGameBoard from './game-screen/useGameBoard'
 import ShutdownTimer from './game-screen/ShutdownTimer'
 
 interface GameScreenProps {
-  sessionId: string
-  gameId: string
-  players: SessionParticipant[]
-  gameOptions: LobbyOptions
-  participantRole: SessionParticipantRole
-  currentPlayerId: string
-  gameState: GameState
-  shutdown: ShutdownState | null
-  onPlaceCell: (x: number, y: number) => void
-  onLeave: () => void
-  leaveLabel?: string
-  overlay?: ReactNode
-  interactionEnabled?: boolean
-  showTilePieceMarkers?: boolean
+    sessionId: string
+    gameId: string
+    players: SessionParticipant[]
+    gameOptions: LobbyOptions
+    participantRole: SessionParticipantRole
+    currentPlayerId: string
+    gameState: GameState
+    shutdown: ShutdownState | null
+    onPlaceCell: (x: number, y: number) => void
+    onLeave: () => void
+    leaveLabel?: string
+    overlay?: ReactNode
+    interactionEnabled?: boolean
+    showTilePieceMarkers?: boolean
 
-  chat: SessionChat
-  isChatOpen: boolean
-  onChatOpenChange: (isOpen: boolean) => void
-  onSendChatMessage?: (message: string) => void
+    chat: SessionChat
+    isChatOpen: boolean
+    onChatOpenChange: (isOpen: boolean) => void
+    onSendChatMessage?: (message: string) => void
 }
 
 function GameScreen({
-  sessionId,
-  gameId,
-  players,
-  gameOptions,
-  participantRole,
-  currentPlayerId,
-  gameState,
-  shutdown,
-  onPlaceCell,
-  onLeave,
-  leaveLabel,
-  overlay,
-  interactionEnabled = true,
-  showTilePieceMarkers = false,
+    sessionId,
+    gameId,
+    players,
+    gameOptions,
+    participantRole,
+    currentPlayerId,
+    gameState,
+    shutdown,
+    onPlaceCell,
+    onLeave,
+    leaveLabel,
+    overlay,
+    interactionEnabled = true,
+    showTilePieceMarkers = false,
 
-  chat,
-  isChatOpen,
-  onChatOpenChange,
-  onSendChatMessage,
+    chat,
+    isChatOpen,
+    onChatOpenChange,
+    onSendChatMessage,
 }: Readonly<GameScreenProps>) {
-  const previousCellCountRef = useRef(gameState.cells.length)
-  const isSpectator = participantRole === 'spectator'
-  const isOwnTurn = Boolean(currentPlayerId) && gameState.currentTurnPlayerId === currentPlayerId
-  const canPlaceCell = interactionEnabled && !isSpectator && isOwnTurn
+    const previousCellCountRef = useRef(gameState.cells.length)
+    const isSpectator = participantRole === 'spectator'
+    const isOwnTurn = Boolean(currentPlayerId) && gameState.currentTurnPlayerId === currentPlayerId
+    const canPlaceCell = interactionEnabled && !isSpectator && isOwnTurn
 
-  const hudPlayerInfo = useMemo(() => {
-    return players.map<HudPlayerInfo>(player => ({
-      playerId: player.id,
-      displayName: player.displayName,
-      displayColor: getPlayerTileColor(gameState.playerTiles, player.id),
-      isConnected: player.connection.status === "connected"
-    }));
-  }, [gameState.playerTiles, players])
+    const hudPlayerInfo = useMemo(() => {
+        return players.map<HudPlayerInfo>(player => ({
+            playerId: player.id,
+            profileId: player.profileId,
 
-  useEffect(() => {
-    previousCellCountRef.current = gameState.cells.length
-  }, [currentPlayerId, participantRole, gameId])
+            displayName: player.displayName,
+            displayColor: getPlayerTileColor(gameState.playerTiles, player.id),
 
-  const {
-    canvasRef,
-    canvasClassName,
-    canvasHandlers,
-    renderableCellCount,
-    resetView
-  } = useGameBoard({
-    gameState: gameState,
-    highlightedCells: gameState.winner?.cells ?? "turn",
-    localPlayerId: isSpectator ? null : currentPlayerId,
-    interactionEnabled,
-    showTilePieceMarkers,
-    onPlaceCell: canPlaceCell ? onPlaceCell : undefined
-  })
+            isConnected: player.connection.status === "connected"
+        }));
+    }, [gameState.playerTiles, players])
 
-  useEffect(() => {
-    const previousCellCount = previousCellCountRef.current
-    if (interactionEnabled && gameState.cells.length > previousCellCount) {
-      playTilePlacedSound()
-    }
+    useEffect(() => {
+        previousCellCountRef.current = gameState.cells.length
+    }, [currentPlayerId, participantRole, gameId])
 
-    previousCellCountRef.current = gameState.cells.length
-  }, [gameState.cells.length, interactionEnabled])
+    const {
+        canvasRef,
+        canvasClassName,
+        canvasHandlers,
+        renderableCellCount,
+        resetView
+    } = useGameBoard({
+        gameState: gameState,
+        highlightedCells: gameState.winner?.cells ?? "turn",
+        localPlayerId: isSpectator ? null : currentPlayerId,
+        interactionEnabled,
+        showTilePieceMarkers,
+        onPlaceCell: canPlaceCell ? onPlaceCell : undefined
+    })
 
-  return (
-    <div className="relative w-full h-full overflow-hidden bg-slate-950 text-white">
-      <GameBoardCanvas
-        canvasRef={canvasRef}
-        className={canvasClassName}
-        handlers={canvasHandlers}
-      />
+    useEffect(() => {
+        const previousCellCount = previousCellCountRef.current
+        if (interactionEnabled && gameState.cells.length > previousCellCount) {
+            playTilePlacedSound()
+        }
 
-      <div className="pointer-events-none absolute inset-0">
-        <div className="flex h-full flex-col justify-between gap-4">
-          {interactionEnabled && (
-            <TurnTimerHud
-              gameOptions={gameOptions}
-              players={players}
-              gameState={gameState}
-              localPlayerId={isSpectator ? null : currentPlayerId}
+        previousCellCountRef.current = gameState.cells.length
+    }, [gameState.cells.length, interactionEnabled])
+
+    return (
+        <div className="relative w-full h-full overflow-hidden bg-slate-950 text-white">
+            <GameBoardCanvas
+                canvasRef={canvasRef}
+                className={canvasClassName}
+                handlers={canvasHandlers}
             />
-          )}
-        </div>
-      </div>
 
-      {overlay && (
-        <div className="absolute inset-0">
-          {overlay}
-        </div>
-      )}
+            <div className="pointer-events-none absolute inset-0">
+                <div className="flex h-full flex-col justify-between gap-4">
+                    {interactionEnabled && (
+                        <TurnTimerHud
+                            gameOptions={gameOptions}
+                            players={players}
+                            gameState={gameState}
+                            localPlayerId={isSpectator ? null : currentPlayerId}
+                        />
+                    )}
+                </div>
+            </div>
 
-      {shutdown && (
-        <div className="absolute bottom-3 left-3 rounded-full border border-amber-300/40 bg-amber-200/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100 shadow-lg">
-          Server Restart in <ShutdownTimer shutdown={shutdown} />
-        </div>
-      )}
+            {overlay && (
+                <div className="absolute inset-0">
+                    {overlay}
+                </div>
+            )}
 
-      <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
-        <GameChatBox
-          currentParticipantId={currentPlayerId}
-          chat={chat}
-          isOpen={isChatOpen}
-          onOpenChange={onChatOpenChange}
-          onSendMessage={onSendChatMessage}
-        />
-        {interactionEnabled && (
-          <GameScreenHud
-            sessionId={sessionId}
-            gameOptions={gameOptions}
+            {shutdown && (
+                <div className="absolute bottom-3 left-3 rounded-full border border-amber-300/40 bg-amber-200/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100 shadow-lg">
+                    Server Restart in <ShutdownTimer shutdown={shutdown} />
+                </div>
+            )}
 
-            players={hudPlayerInfo}
-            localPlayerId={currentPlayerId}
+            <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
+                <GameChatBox
+                    currentParticipantId={currentPlayerId}
+                    chat={chat}
+                    isOpen={isChatOpen}
+                    onOpenChange={onChatOpenChange}
+                    onSendMessage={onSendChatMessage}
+                />
+                {interactionEnabled && (
+                    <GameScreenHud
+                        sessionId={sessionId}
+                        gameOptions={gameOptions}
 
-            occupiedCellCount={gameState.cells.length}
-            renderableCellCount={renderableCellCount}
+                        players={hudPlayerInfo}
+                        localPlayerId={currentPlayerId}
 
-            shutdown={shutdown}
+                        occupiedCellCount={gameState.cells.length}
+                        renderableCellCount={renderableCellCount}
 
-            leaveLabel={leaveLabel}
-            onLeave={onLeave}
-            onResetView={resetView}
-          />
-        )}
-      </div>
-    </div >
-  )
+                        shutdown={shutdown}
+
+                        leaveLabel={leaveLabel}
+                        onLeave={onLeave}
+                        onResetView={resetView}
+                    />
+                )}
+            </div>
+        </div >
+    )
 }
 
 export default GameScreen
