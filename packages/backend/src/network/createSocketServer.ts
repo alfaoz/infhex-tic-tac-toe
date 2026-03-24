@@ -169,7 +169,7 @@ export class SocketServerGateway {
                     deviceId: clientInfo.deviceId,
 
                     profile: user,
-                    displayName: user?.username ?? clientInfo.deviceId.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase(),
+                    displayName: user?.username ?? "Guest " + clientInfo.deviceId.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase(),
 
                     allowSelfJoinCasualGames: preferences.allowSelfJoinCasualGames
                 });
