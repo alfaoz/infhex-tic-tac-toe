@@ -1164,7 +1164,7 @@ export class SessionManager {
             return false;
         }
 
-        if (!session.players.some(player => !player.profileId)) {
+        if (session.players.some(player => !player.profileId)) {
             /* session contains guests */
             return false;
         }
