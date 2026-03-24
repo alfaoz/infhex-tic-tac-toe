@@ -647,7 +647,7 @@ export type SessionJoinedEvent = z.infer<typeof zSessionJoinedEvent>;
 
 export const zSessionUpdatedEvent = z.object({
     sessionId: zIdentifier,
-    session: zSessionInfo
+    session: zSessionInfo.partial()
 });
 export type SessionUpdatedEvent = z.infer<typeof zSessionUpdatedEvent>;
 
@@ -657,14 +657,6 @@ export const zSessionChatEvent = z.object({
     senderDisplayName: z.string()
 });
 export type SessionChatEvent = z.infer<typeof zSessionChatEvent>;
-
-export const zParticipantUpdatedEvent = z.object({
-    sessionId: zIdentifier,
-    participantId: zIdentifier,
-    participantRole: zSessionParticipantRole,
-    session: zSessionInfo
-});
-export type ParticipantUpdatedEvent = z.infer<typeof zParticipantUpdatedEvent>;
 
 export const zGameStateEvent = z.object({
     sessionId: zIdentifier,
@@ -688,9 +680,6 @@ export const zServerToClientEvents = z.custom<{
     'session-joined': (data: SessionJoinedEvent) => void;
     'session-updated': (data: SessionUpdatedEvent) => void;
     'session-chat': (data: SessionChatEvent) => void;
-
-    'participant-joined': (data: ParticipantUpdatedEvent) => void;
-    'participant-left': (data: ParticipantUpdatedEvent) => void;
 
     'game-state': (data: GameStateEvent) => void;
     error: (error: string) => void;

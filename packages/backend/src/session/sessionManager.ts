@@ -32,7 +32,6 @@ import type {
     PlayerLeaveSource,
     RematchRequestResult,
     SessionManagerEventHandlers,
-    SessionUpdatedEvent,
     ServerGameSession,
     ServerSessionParticipant,
     ClientGameParticipation,
@@ -301,13 +300,10 @@ export class SessionManager {
             spectators: session.spectators.map(({ id }) => id),
         });
 
-        const sessionInfo = this.toSessionInfo(session);
-        this.eventHandlers.participantJoined?.({
-            sessionId: session.id,
-            participantId: participant.id,
-            participantRole,
-            session: sessionInfo
-        });
+        this.emitSessionUpdated(
+            session,
+            [participantRole === "player" ? "players" : "spectators"]
+        );
         this.emitLobbyListUpdated();
 
         return {
@@ -454,7 +450,7 @@ export class SessionManager {
             if (!session.rematchAcceptedPlayerIds.includes(participantId)) {
                 session.rematchAcceptedPlayerIds = [...session.rematchAcceptedPlayerIds, participantId];
             }
-            this.emitSessionUpdated(session);
+            this.emitSessionUpdated(session, ["state"]);
 
             return {
                 status: session.rematchAcceptedPlayerIds.length === session.players.length ? 'ready' : 'pending',
@@ -566,13 +562,12 @@ export class SessionManager {
                     return;
                 }
 
+                session.rematchAcceptedPlayerIds = session.rematchAcceptedPlayerIds.filter(playerId => playerId !== participantId);
+            } else {
                 session.rematchAcceptedPlayerIds = [];
-                this.emitSessionUpdated(session);
-                return;
             }
 
-            session.rematchAcceptedPlayerIds = [];
-            this.emitSessionUpdated(session);
+            this.emitSessionUpdated(session, ["state"]);
         })
     }
 
@@ -691,7 +686,7 @@ export class SessionManager {
 
                 if (playersUpdated) {
                     this.emitLobbyListUpdated()
-                    this.emitSessionUpdated(session)
+                    this.emitSessionUpdated(session, ["players"])
                 }
 
                 if (connectedPlayers.length < MAX_PLAYERS_PER_SESSION) {
@@ -728,7 +723,7 @@ export class SessionManager {
 
                 this.emitGameState(session);
                 this.emitLobbyListUpdated();
-                this.emitSessionUpdated(session);
+                this.emitSessionUpdated(session, ["state", "players"]);
                 this.logger.info(
                     {
                         event: 'session.started',
@@ -812,7 +807,7 @@ export class SessionManager {
 
         this.timeControl.clearSession(session.id);
         this.emitLobbyListUpdated();
-        this.emitSessionUpdated(session);
+        this.emitSessionUpdated(session, ["players", "state"]);
         this.shutdownHook.tryShutdown();
 
         this.logger.info(
@@ -873,13 +868,7 @@ export class SessionManager {
         });
 
         session.rematchAcceptedPlayerIds = [];
-        this.eventHandlers.participantLeft?.({
-            sessionId: session.id,
-            participantId,
-            participantRole: 'player',
-            session: this.toSessionInfo(session)
-        });
-
+        this.emitSessionUpdated(session, ["players", "state"]);
         this.emitLobbyListUpdated();
         void this.tickSession(session);
     }
@@ -902,13 +891,7 @@ export class SessionManager {
             remainingSpectators: session.spectators.map(({ id }) => id)
         });
 
-        this.eventHandlers.participantLeft?.({
-            sessionId: session.id,
-            participantId,
-            participantRole: 'spectator',
-            session: this.toSessionInfo(session)
-        });
-
+        this.emitSessionUpdated(session, ["spectators"]);
         void this.tickSession(session);
     }
 
@@ -963,7 +946,10 @@ export class SessionManager {
             );
         }
 
-        this.emitSessionUpdated(participation.session);
+        this.emitSessionUpdated(
+            participation.session,
+            [participation.role === "player" ? "players" : "spectators"]
+        );
         void this.tickSession(participation.session);
     }
 
@@ -971,12 +957,22 @@ export class SessionManager {
         this.eventHandlers.lobbyListUpdated?.(this.listLobbyInfo());
     }
 
-    private emitSessionUpdated(session: ServerGameSession): void {
-        const event: SessionUpdatedEvent = {
+    private emitSessionUpdated(session: ServerGameSession, keys?: (keyof SessionInfo)[]): void {
+        const fullInfo = this.toSessionInfo(session);
+        const partialInfo: Partial<SessionInfo> = {};
+        if (keys) {
+            for (const key of keys) {
+                /* @ts-ignore */
+                partialInfo[key] = fullInfo[key];
+            }
+        } else {
+            Object.assign(partialInfo, fullInfo);
+        }
+
+        this.eventHandlers.sessionUpdated?.({
             sessionId: session.id,
-            session: this.toSessionInfo(session)
-        };
-        this.eventHandlers.sessionUpdated?.(event);
+            session: partialInfo
+        });
     }
 
     private emitGameState(session: ServerGameSession): void {
@@ -1142,7 +1138,10 @@ export class SessionManager {
                 socketId
             }, 'Reclaimed orphaned session connection from device id');
 
-            this.emitSessionUpdated(info.session);
+            this.emitSessionUpdated(
+                info.session,
+                [info.role === "player" ? "players" : "spectators"]
+            );
 
             return {
                 session: this.toSessionInfo(info.session),
@@ -1285,6 +1284,7 @@ export class SessionManager {
         return true;
     }
 
+    /// Update the player rating adjustments. emitSessionUpdated with players must be called manually afterwards
     private async applyRatingAdjustments(session: ServerGameSession, winningPlayerId: string | null): Promise<void> {
         if (!session.isRatedGame || !winningPlayerId) {
             return;
@@ -1318,8 +1318,6 @@ export class SessionManager {
                 gameId,
                 eloAdjustments
             );
-
-            this.emitSessionUpdated(session);
         } catch (error: unknown) {
             this.logger.error(
                 {

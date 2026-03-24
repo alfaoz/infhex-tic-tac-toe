@@ -4,6 +4,7 @@ import {
     PlayerRating,
     SessionChatEvent,
     SessionChatSenderId,
+    SessionUpdatedEvent,
     type GameState,
     type LobbyInfo,
     type LobbyOptions,
@@ -99,18 +100,11 @@ export interface ParticipantJoinedEvent {
     session: SessionInfo;
 }
 
-export interface SessionUpdatedEvent {
-    sessionId: string;
-    session: SessionInfo;
-}
-
 export interface SessionManagerEventHandlers {
     lobbyListUpdated?: (lobbies: LobbyInfo[]) => void;
     sessionUpdated?: (event: SessionUpdatedEvent) => void;
     sessionChat?: (event: SessionChatEvent) => void;
     gameStateUpdated?: (payload: PublicGameStatePayload) => void;
-    participantJoined?: (event: ParticipantJoinedEvent) => void;
-    participantLeft?: (event: ParticipantLeftEvent) => void;
 }
 
 export interface RematchRequestResult {

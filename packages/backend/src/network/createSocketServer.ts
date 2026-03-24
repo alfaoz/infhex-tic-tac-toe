@@ -23,10 +23,7 @@ import { CorsConfiguration } from './cors';
 import { SessionError, SessionManager } from '../session/sessionManager';
 import type {
     ClientGameParticipation,
-    ParticipantJoinedEvent,
-    ParticipantLeftEvent,
     PublicGameStatePayload,
-    SessionUpdatedEvent,
 } from '../session/types';
 import { Mutex } from 'async-mutex';
 
@@ -76,7 +73,7 @@ export class SocketServerGateway {
             lobbyListUpdated: (lobbies) => {
                 this.scheduleLobbyListBroadcast(io, lobbies);
             },
-            sessionUpdated(event: SessionUpdatedEvent) {
+            sessionUpdated(event) {
                 io.to(event.sessionId).emit('session-updated', event);
             },
             sessionChat(event) {
@@ -84,12 +81,6 @@ export class SocketServerGateway {
             },
             gameStateUpdated(payload: PublicGameStatePayload) {
                 io.to(payload.sessionId).emit('game-state', payload);
-            },
-            participantJoined(event: ParticipantJoinedEvent) {
-                io.to(event.sessionId).emit('participant-joined', event);
-            },
-            participantLeft(event: ParticipantLeftEvent) {
-                io.to(event.sessionId).emit('participant-left', event);
             }
         });
         this.serverShutdownService.setEventHandlers({
