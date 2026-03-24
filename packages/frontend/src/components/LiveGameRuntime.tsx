@@ -19,7 +19,7 @@ function LiveGameRuntime() {
   )
   const previousLastChatMessageIdRef = useRef(
     liveScreen.kind === 'session'
-      ? (liveScreen.session.chatMessages[liveScreen.session.chatMessages.length - 1]?.id ?? null)
+      ? (liveScreen.session.chat.messages[liveScreen.session.chat.messages.length - 1]?.id ?? null)
       : null
   )
 
@@ -55,7 +55,7 @@ function LiveGameRuntime() {
   useEffect(() => {
     const nextSessionId = liveScreen.kind === 'session' ? liveScreen.sessionId : null
     const nextLastChatMessage = liveScreen.kind === 'session'
-      ? (liveScreen.session.chatMessages[liveScreen.session.chatMessages.length - 1] ?? null)
+      ? (liveScreen.session.chat.messages[liveScreen.session.chat.messages.length - 1] ?? null)
       : null
     const previousSessionId = previousSessionIdRef.current
     const previousLastChatMessageId = previousLastChatMessageIdRef.current
@@ -64,7 +64,7 @@ function LiveGameRuntime() {
       previousSessionId === nextSessionId
       && nextLastChatMessage
       && nextLastChatMessage.id !== previousLastChatMessageId
-      && nextLastChatMessage.participantId !== currentPlayerId
+      && nextLastChatMessage.senderId !== currentPlayerId
     ) {
       playChatMessageSound()
     }

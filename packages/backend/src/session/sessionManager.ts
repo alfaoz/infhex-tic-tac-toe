@@ -6,6 +6,8 @@ import type {
     SessionFinishReason,
     SessionInfo,
     SessionParticipantRole,
+    SessionChatMessageId,
+    SessionChatSenderId,
 } from '@ih3t/shared';
 import { buildPlayerTileConfigMap } from '@ih3t/shared';
 import assert from 'node:assert';
@@ -36,6 +38,7 @@ import type {
     ServerSessionParticipation,
 } from './types';
 import {
+    cloneChatMessage,
     cloneGameOptions,
     cloneParticipants,
     createGameSession,
@@ -393,27 +396,28 @@ export class SessionManager {
         this.emitGameState(session);
     }
 
-    sendChatMessage(session: ServerGameSession, participantId: string, message: string): SessionChatMessage {
-        if (session.state === 'lobby') {
-            throw new SessionError('Chat is only available once the match has started.');
-        }
-
+    sendChatMessage(session: ServerGameSession, participantId: string, message: string) {
         const participant = session.players.find((player) => player.id === participantId);
         if (!participant) {
             throw new SessionError('Only active match players can chat.');
         }
 
+        const senderId = participantId as SessionChatSenderId;
         const chatMessage: SessionChatMessage = {
-            id: Math.random().toString(36).slice(2, 10),
-            participantId,
-            participantDisplayName: participant.displayName,
+            id: Math.random().toString(36).slice(2, 10) as SessionChatMessageId,
+            senderId,
             message,
             sentAt: Date.now()
         };
 
+        session.chatNames[senderId] = participant.displayName;
         session.chatMessages = [...session.chatMessages, chatMessage].slice(-MAX_SESSION_CHAT_MESSAGES);
-        this.emitSessionUpdated(session);
-        return chatMessage;
+
+        this.eventHandlers.sessionChat?.({
+            sessionId: session.id,
+            message: chatMessage,
+            senderDisplayName: participant.displayName,
+        });
     }
 
     requestRematch(session: ServerGameSession, participantId: string): RematchRequestResult {
@@ -500,9 +504,13 @@ export class SessionManager {
             }
         });
 
+        rematchSession.chatNames = Object.fromEntries(
+            Object.entries(originalSession.chatNames)
+                .map(([senderId, displayName]) => [participantMapping[senderId], displayName])
+        );
         rematchSession.chatMessages = originalSession.chatMessages.map(message => ({
             ...message,
-            participantId: participantMapping[message.participantId]
+            senderId: participantMapping[message.senderId] as SessionChatSenderId
         }));
 
         const socketMapping: Record<string, string> = {};
@@ -1113,8 +1121,12 @@ export class SessionManager {
             players: cloneParticipants(session.players),
             spectators: cloneParticipants(session.spectators),
             gameOptions: cloneGameOptions(session.gameOptions),
-            chatMessages: session.chatMessages.map((chatMessage) => ({ ...chatMessage }))
-        };
+
+            chat: {
+                displayNames: session.chatNames,
+                messages: session.chatMessages.map(cloneChatMessage),
+            }
+        } satisfies Partial<SessionInfo>;
 
         switch (session.state) {
             case 'lobby':

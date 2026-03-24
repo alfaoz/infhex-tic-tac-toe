@@ -134,6 +134,8 @@ export function startLiveGameClient() {
     currentState.updateBoard(data)
   })
 
+  socket.on('session-chat', data => useLiveGameStore.getState().handleSessionChatEvent(data))
+
   socket.on('participant-joined', data => {
     useLiveGameStore.getState().updateSession({
       sessionId: data.sessionId,

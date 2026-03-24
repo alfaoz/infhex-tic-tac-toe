@@ -1,6 +1,7 @@
 import {
   cloneGameState,
   createEmptyGameState,
+  SessionChatEvent,
   type GameState,
   type ServerToClientEvents,
   type SessionInfo,
@@ -50,6 +51,7 @@ interface LiveGameStoreState {
   failJoiningSession: (sessionId: string, errorMessage: string) => void
   setupSession: (payload: SessionJoinedPayload) => void
   updateSession: (payload: SessionUpdatedPayload) => void
+  handleSessionChatEvent: (payload: SessionChatEvent) => void
   updateBoard: (payload: GameStatePayload) => void
   resetToLobby: () => void
 }
@@ -59,7 +61,6 @@ function cloneSessionInfo(session: SessionInfo): SessionInfo {
     ...session,
     players: session.players.map(player => ({ ...player })),
     spectators: session.spectators.map(spectator => ({ ...spectator })),
-    chatMessages: session.chatMessages.map(chatMessage => ({ ...chatMessage })),
     gameOptions: {
       ...session.gameOptions,
       timeControl: { ...session.gameOptions.timeControl }
@@ -189,6 +190,15 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
           }
         }
       }),
+    handleSessionChatEvent: event => set(state => {
+      if (state.screen.kind !== 'session' || state.screen.sessionId !== event.sessionId) {
+        return
+      }
+
+      const chat = state.screen.session.chat;
+      chat.displayNames[event.message.senderId] = event.senderDisplayName;
+      chat.messages = [...chat.messages, event.message];
+    }),
     updateBoard: (payload) =>
       set((state) => {
         if (state.screen.kind !== 'session' || state.screen.sessionId !== payload.sessionId) {

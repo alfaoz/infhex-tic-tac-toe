@@ -2,6 +2,8 @@ import {
     cloneGameState,
     createEmptyGameState,
     PlayerRating,
+    SessionChatEvent,
+    SessionChatSenderId,
     type GameState,
     type LobbyInfo,
     type LobbyOptions,
@@ -52,8 +54,10 @@ export interface ServerGameSession {
     finishReason: SessionFinishReason | null;
     winningPlayerId: string | null;
     rematchAcceptedPlayerIds: string[];
-    chatMessages: SessionChatMessage[];
     isRatedGame: boolean;
+
+    chatNames: Record<SessionChatSenderId, string>;
+    chatMessages: SessionChatMessage[];
 }
 
 export type PlayerLeaveSource = 'leave-session' | 'disconnect';
@@ -99,6 +103,7 @@ export interface SessionUpdatedEvent {
 export interface SessionManagerEventHandlers {
     lobbyListUpdated?: (lobbies: LobbyInfo[]) => void;
     sessionUpdated?: (event: SessionUpdatedEvent) => void;
+    sessionChat?: (event: SessionChatEvent) => void;
     gameStateUpdated?: (payload: PublicGameStatePayload) => void;
     participantJoined?: (event: ParticipantJoinedEvent) => void;
     participantLeft?: (event: ParticipantLeftEvent) => void;
@@ -129,6 +134,17 @@ export function toPublicParticipantConnection(connection: ServerParticipantConne
     return {
         status: connection.status
     };
+}
+
+export function cloneChatMessage(message: SessionChatMessage): SessionChatMessage {
+    return {
+        id: message.id,
+
+        senderId: message.senderId,
+        sentAt: message.sentAt,
+
+        message: message.message,
+    }
 }
 
 export function cloneSessionParticipant(participant: ServerSessionParticipant): SessionParticipant {
@@ -183,10 +199,12 @@ export function createGameSession(
         finishReason: null,
         winningPlayerId: null,
         rematchAcceptedPlayerIds: [],
-        chatMessages: [],
         isRatedGame: false,
 
         gameId: '',
         gameState: createEmptyGameState(),
+
+        chatNames: {},
+        chatMessages: [],
     };
 }

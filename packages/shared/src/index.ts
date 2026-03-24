@@ -147,12 +147,17 @@ export type AdminBroadcastMessageResponse = z.infer<typeof zAdminBroadcastMessag
 export const zSessionChatMessageText = z.string().trim().min(1).max(280);
 export type SessionChatMessageText = z.infer<typeof zSessionChatMessageText>;
 
+export const zSessionChatMessageId = z.string().brand("ChatMessageId");
+export type SessionChatMessageId = z.infer<typeof zSessionChatMessageId>;
+
+export const zSessionChatSenderId = z.string().brand("ChatSender");
+export type SessionChatSenderId = z.infer<typeof zSessionChatSenderId>;
+
 export const zSessionChatMessage = z.object({
-    id: zIdentifier,
-    participantId: zIdentifier,
-    participantDisplayName: z.string(),
+    id: zSessionChatMessageId,
+    sentAt: zTimestamp,
+    senderId: zSessionChatSenderId,
     message: zSessionChatMessageText,
-    sentAt: zTimestamp
 });
 export type SessionChatMessage = z.infer<typeof zSessionChatMessage>;
 
@@ -515,12 +520,20 @@ export const zJoinSessionRequest = z.object({
 });
 export type JoinSessionRequest = z.infer<typeof zJoinSessionRequest>;
 
+const zSessionChat = z.object({
+    messages: z.array(zSessionChatMessage).default([]),
+    displayNames: z.record(z.string(), z.string()),
+});
+export type SessionChat = z.infer<typeof zSessionChat>;
+
 const zSessionInfoBase = z.object({
     id: zIdentifier,
+    gameOptions: zLobbyOptions,
+
     players: z.array(zSessionParticipant),
     spectators: z.array(zSessionParticipant),
-    gameOptions: zLobbyOptions,
-    chatMessages: z.array(zSessionChatMessage).default([])
+
+    chat: zSessionChat,
 });
 
 export const zSessionInfo = z.discriminatedUnion('state', [
@@ -635,6 +648,13 @@ export const zSessionUpdatedEvent = z.object({
 });
 export type SessionUpdatedEvent = z.infer<typeof zSessionUpdatedEvent>;
 
+export const zSessionChatEvent = z.object({
+    sessionId: z.string(),
+    message: zSessionChatMessage,
+    senderDisplayName: z.string()
+});
+export type SessionChatEvent = z.infer<typeof zSessionChatEvent>;
+
 export const zParticipantUpdatedEvent = z.object({
     sessionId: zIdentifier,
     participantId: zIdentifier,
@@ -661,10 +681,14 @@ export const zServerToClientEvents = z.custom<{
     'lobby-list': (lobbies: LobbyInfo[]) => void;
     'shutdown-updated': (shutdown: ShutdownState | null) => void;
     'admin-message': (broadcast: AdminBroadcastMessage) => void;
+
     'session-joined': (data: SessionJoinedEvent) => void;
     'session-updated': (data: SessionUpdatedEvent) => void;
+    'session-chat': (data: SessionChatEvent) => void;
+
     'participant-joined': (data: ParticipantUpdatedEvent) => void;
     'participant-left': (data: ParticipantUpdatedEvent) => void;
+
     'game-state': (data: GameStateEvent) => void;
     error: (error: string) => void;
 }>();

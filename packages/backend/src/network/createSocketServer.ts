@@ -79,6 +79,9 @@ export class SocketServerGateway {
             sessionUpdated(event: SessionUpdatedEvent) {
                 io.to(event.sessionId).emit('session-updated', event);
             },
+            sessionChat(event) {
+                io.to(event.sessionId).emit('session-chat', event);
+            },
             gameStateUpdated(payload: PublicGameStatePayload) {
                 io.to(payload.sessionId).emit('game-state', payload);
             },

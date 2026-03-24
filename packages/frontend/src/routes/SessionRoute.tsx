@@ -451,7 +451,7 @@ function SessionRoute() {
           onLeave={participantRole === 'player' ? surrenderGame : returnToLobbyAndNavigate}
           leaveLabel={participantRole === 'player' ? 'Surrender' : 'Leave Game'}
           showTilePieceMarkers={showTilePieceMarkers}
-          chatMessages={liveScreen.session.chatMessages}
+          chat={liveScreen.session.chat}
         />
         {leaveConfirmModal}
       </>
@@ -494,7 +494,7 @@ function SessionRoute() {
             onLeave={returnToLobbyAndNavigate}
             interactionEnabled={false}
             showTilePieceMarkers={showTilePieceMarkers}
-            chatMessages={liveScreen.session.chatMessages}
+            chat={liveScreen.session.chat}
             overlay={result === 'winner'
               ? (
                 <WinnerScreen
@@ -539,7 +539,7 @@ function SessionRoute() {
           onLeave={returnToLobbyAndNavigate}
           interactionEnabled={false}
           showTilePieceMarkers={showTilePieceMarkers}
-          chatMessages={liveScreen.session.chatMessages}
+          chat={liveScreen.session.chat}
           overlay={(
             <SpectatorFinishedScreen
               session={liveScreen.session}

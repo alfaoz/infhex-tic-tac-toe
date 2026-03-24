@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
-import type { GameState, LobbyOptions, SessionChatMessage, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
+import type { GameState, LobbyOptions, SessionChat, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared'
 import { playTilePlacedSound } from '../soundEffects'
 import { getPlayerLabel, getPlayerTileColor } from '../utils/gameBoard'
 import GameBoardCanvas from './game-screen/GameBoardCanvas'
@@ -19,16 +19,17 @@ interface GameScreenProps {
   currentPlayerId: string
   gameState: GameState
   shutdown: ShutdownState | null
-  isChatOpen: boolean
-  onChatOpenChange: (isOpen: boolean) => void
   onPlaceCell: (x: number, y: number) => void
-  onSendChatMessage?: (message: string) => void
   onLeave: () => void
   leaveLabel?: string
   overlay?: ReactNode
   interactionEnabled?: boolean
   showTilePieceMarkers?: boolean
-  chatMessages?: SessionChatMessage[]
+
+  chat: SessionChat
+  isChatOpen: boolean
+  onChatOpenChange: (isOpen: boolean) => void
+  onSendChatMessage?: (message: string) => void
 }
 
 function GameScreen({
@@ -40,16 +41,17 @@ function GameScreen({
   currentPlayerId,
   gameState,
   shutdown,
-  isChatOpen,
-  onChatOpenChange,
   onPlaceCell,
-  onSendChatMessage,
   onLeave,
   leaveLabel,
   overlay,
   interactionEnabled = true,
   showTilePieceMarkers = false,
-  chatMessages = []
+
+  chat,
+  isChatOpen,
+  onChatOpenChange,
+  onSendChatMessage,
 }: Readonly<GameScreenProps>) {
   const previousCellCountRef = useRef(gameState.cells.length)
 
@@ -131,11 +133,10 @@ function GameScreen({
       <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
         <GameChatBox
           currentParticipantId={currentPlayerId}
-          messages={chatMessages}
+          chat={chat}
           isOpen={isChatOpen}
           onOpenChange={onChatOpenChange}
           onSendMessage={onSendChatMessage}
-          placement={interactionEnabled ? 'in-game' : 'finished'}
         />
         {interactionEnabled && (
           <GameScreenHud

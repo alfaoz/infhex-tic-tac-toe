@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SessionChatMessage } from '@ih3t/shared'
+import type { SessionChat } from '@ih3t/shared'
 import GameHudShell from './GameHudShell'
 import { cn } from '../../utils/cn'
 
 interface SessionChatBoxProps {
   currentParticipantId: string
-  messages: SessionChatMessage[]
-  placement: 'in-game' | 'finished'
+  chat: SessionChat
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
   onSendMessage?: (message: string) => void
@@ -31,11 +30,10 @@ function formatMessageTime(timestamp: number) {
 
 function GameChatBox({
   currentParticipantId,
-  messages,
+  chat,
   isOpen,
   onOpenChange,
   onSendMessage,
-  placement,
 }: Readonly<SessionChatBoxProps>) {
   const [draft, setDraft] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
@@ -46,7 +44,7 @@ function GameChatBox({
   const lastTrackedMessageIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1] ?? null
+    const lastMessage = chat.messages[chat.messages.length - 1] ?? null
     if (!lastMessage) {
       lastTrackedMessageIdRef.current = null
       return
@@ -57,13 +55,13 @@ function GameChatBox({
     }
 
     lastTrackedMessageIdRef.current = lastMessage.id
-    if (isOpen || lastMessage.participantId === currentParticipantId) {
+    if (isOpen || lastMessage.senderId === currentParticipantId) {
       setUnreadCount(0)
       return
     }
 
     setUnreadCount((currentCount) => currentCount + 1)
-  }, [currentParticipantId, isOpen, messages])
+  }, [currentParticipantId, isOpen, chat.messages])
 
   useEffect(() => {
     if (!isOpen) {
@@ -89,7 +87,7 @@ function GameChatBox({
     }
 
     container.scrollTop = container.scrollHeight
-  }, [isOpen, messages.length])
+  }, [isOpen, chat.messages.length])
 
   const openChat = (focusComposer = false) => {
     focusTargetRef.current = focusComposer ? 'composer' : 'panel'
@@ -122,19 +120,19 @@ function GameChatBox({
         ref={messagesRef}
         className="h-72 overflow-y-auto rounded-2xl mt-2 mr-[-1em] pr-[1em]"
       >
-        {messages.length === 0 ? (
+        {chat.messages.length === 0 ? (
           <div className="px-2 py-5 text-sm leading-6 text-slate-300">
             No messages yet. Say something to your opponent while the match is live.
           </div>
-        ) : messages.map((message, index) => {
-          const isSameSender = index > 0 && messages[index - 1].participantId === message.participantId && message.sentAt - messages[index - 1].sentAt < 60_000
-          const isOwnMessage = message.participantId === currentParticipantId
+        ) : chat.messages.map((message, index) => {
+          const isSameSender = index > 0 && chat.messages[index - 1].senderId === message.senderId && message.sentAt - chat.messages[index - 1].sentAt < 60_000
+          const isOwnMessage = message.senderId === currentParticipantId
 
           if (isSameSender) {
             return (
               <div
                 key={message.id}
-                className="ml-2 whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-100/80"
+                className="ml-2 whitespace-pre-wrap wrap-break-word text-[13px] leading-5 text-slate-100/80"
               >
                 {message.message}
               </div>
@@ -147,14 +145,14 @@ function GameChatBox({
               className="px-1 pt-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className={`text-[.75rem] font-medium uppercase tracking-[0.1em] ${isOwnMessage ? 'text-sky-100/80' : 'text-slate-200/66'}`}>
-                  {isOwnMessage ? 'You' : message.participantDisplayName}
+                <div className={`text-[.75rem] font-medium uppercase tracking-widest ${isOwnMessage ? 'text-sky-100/80' : 'text-slate-200/66'}`}>
+                  {isOwnMessage ? 'You' : chat.displayNames[message.senderId]}
                 </div>
                 <div className="text-[.8rem] text-slate-400/38">
                   {formatMessageTime(message.sentAt)}
                 </div>
               </div>
-              <div className="mt-1 ml-1 whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-100/80">
+              <div className="mt-1 ml-1 whitespace-pre-wrap wrap-break-word text-[13px] leading-5 text-slate-100/80">
                 {message.message}
               </div>
             </div>
@@ -175,12 +173,12 @@ function GameChatBox({
         }}
         className="pointer-events-auto mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2"
       >
-        <label className="sr-only" htmlFor={`session-chat-input-${placement}`}>
+        <label className="sr-only" htmlFor={`session-chat-input`}>
           Send a chat message
         </label>
         <input
           ref={composerRef}
-          id={`session-chat-input-${placement}`}
+          id={`session-chat-input`}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           maxLength={280}
