@@ -19,6 +19,8 @@ interface GameScreenProps {
   currentPlayerId: string
   gameState: GameState
   shutdown: ShutdownState | null
+  isChatOpen: boolean
+  onChatOpenChange: (isOpen: boolean) => void
   onPlaceCell: (x: number, y: number) => void
   onSendChatMessage?: (message: string) => void
   onLeave: () => void
@@ -38,6 +40,8 @@ function GameScreen({
   currentPlayerId,
   gameState,
   shutdown,
+  isChatOpen,
+  onChatOpenChange,
   onPlaceCell,
   onSendChatMessage,
   onLeave,
@@ -125,15 +129,14 @@ function GameScreen({
       )}
 
       <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
-        {!isSpectator && onSendChatMessage && (
-          <GameChatBox
-            currentParticipantId={currentPlayerId}
-            messages={chatMessages}
-            onSendMessage={onSendChatMessage}
-            placement={interactionEnabled ? 'in-game' : 'finished'}
-            collapsible={interactionEnabled}
-          />
-        )}
+        <GameChatBox
+          currentParticipantId={currentPlayerId}
+          messages={chatMessages}
+          isOpen={isChatOpen}
+          onOpenChange={onChatOpenChange}
+          onSendMessage={onSendChatMessage}
+          placement={interactionEnabled ? 'in-game' : 'finished'}
+        />
         {interactionEnabled && (
           <GameScreenHud
             sessionId={sessionId}

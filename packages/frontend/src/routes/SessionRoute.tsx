@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router'
 import { toast } from 'react-toastify'
 import type { PlayerNames, SessionParticipant, SessionParticipantRole } from '@ih3t/shared'
@@ -168,6 +168,7 @@ function SessionRoute() {
   const attemptedSessionIdRef = useRef<string | null>(null)
   const autoPlacedOpeningTileGameKeyRef = useRef<string | null>(null)
   const handlingBlockedNavigationRef = useRef(false)
+  const [isChatOpen, setIsChatOpen] = useState(false)
   const connection = useLiveGameStore(state => state.connection)
   const pendingSessionJoin = useLiveGameStore(state => state.pendingSessionJoin)
   const shutdown = useLiveGameStore(state => state.shutdown)
@@ -443,6 +444,8 @@ function SessionRoute() {
           currentPlayerId={connection.currentPlayerId}
           gameState={game.gameState}
           shutdown={shutdown}
+          isChatOpen={isChatOpen}
+          onChatOpenChange={setIsChatOpen}
           onPlaceCell={placeCell}
           onSendChatMessage={participantRole === 'player' ? sendSessionChatMessage : undefined}
           onLeave={participantRole === 'player' ? surrenderGame : returnToLobbyAndNavigate}
@@ -484,6 +487,8 @@ function SessionRoute() {
             currentPlayerId={connection.currentPlayerId}
             gameState={game.gameState}
             shutdown={shutdown}
+            isChatOpen={isChatOpen}
+            onChatOpenChange={setIsChatOpen}
             onPlaceCell={() => { }}
             onSendChatMessage={sendSessionChatMessage}
             onLeave={returnToLobbyAndNavigate}
@@ -528,6 +533,8 @@ function SessionRoute() {
           currentPlayerId={connection.currentPlayerId}
           gameState={game.gameState}
           shutdown={shutdown}
+          isChatOpen={isChatOpen}
+          onChatOpenChange={setIsChatOpen}
           onPlaceCell={() => { }}
           onLeave={returnToLobbyAndNavigate}
           interactionEnabled={false}

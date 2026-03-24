@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SessionChatMessage } from '@ih3t/shared'
 import GameHudShell from './GameHudShell'
+import { cn } from '../../utils/cn'
 
 interface SessionChatBoxProps {
   currentParticipantId: string
   messages: SessionChatMessage[]
-  onSendMessage: (message: string) => void
   placement: 'in-game' | 'finished'
-  collapsible?: boolean
+  isOpen: boolean
+  onOpenChange: (isOpen: boolean) => void
+  onSendMessage?: (message: string) => void
 }
 
 function ChatIcon() {
@@ -30,11 +32,12 @@ function formatMessageTime(timestamp: number) {
 function GameChatBox({
   currentParticipantId,
   messages,
+  isOpen,
+  onOpenChange,
   onSendMessage,
   placement,
 }: Readonly<SessionChatBoxProps>) {
   const [draft, setDraft] = useState('')
-  const [isOpen, setIsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
@@ -91,7 +94,7 @@ function GameChatBox({
   const openChat = (focusComposer = false) => {
     focusTargetRef.current = focusComposer ? 'composer' : 'panel'
     setUnreadCount(0)
-    setIsOpen(true)
+    onOpenChange(true)
   }
 
   const unreadLabel = unreadCount > 9 ? '9+' : String(unreadCount)
@@ -100,7 +103,7 @@ function GameChatBox({
       role="right"
       isOpen={isOpen}
       onOpen={() => openChat(true)}
-      onClose={() => setIsOpen(false)}
+      onClose={() => onOpenChange(false)}
       openTitle={unreadCount > 0 ? `${unreadCount} unread chat messages` : 'Open chat'}
       openIcon={<ChatIcon />}
       closeTitle="Close chat"
@@ -167,7 +170,7 @@ function GameChatBox({
             return
           }
 
-          onSendMessage(nextMessage)
+          onSendMessage?.(nextMessage)
           setDraft('')
         }}
         className="pointer-events-auto mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-2"
@@ -181,13 +184,18 @@ function GameChatBox({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           maxLength={280}
-          placeholder="Send a message"
-          className="min-h-[2.75rem] rounded-full border border-white/10 bg-slate-950/35 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-400/70 focus:border-sky-300/40 focus:bg-slate-950/55"
+          placeholder={onSendMessage ? "Send a message" : "You can not send a message"}
+          className={cn(
+            "min-h-11 rounded-full border border-white/10 bg-slate-950/35 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-400/70 focus:border-sky-300/40 focus:bg-slate-950/55",
+            !onSendMessage && "bg-slate-950/10"
+          )}
+
+          disabled={!onSendMessage}
         />
         <button
           type="submit"
-          disabled={draft.trim().length === 0}
-          className="min-w-[7rem] rounded-full bg-sky-600 px-4 py-2.5 font-medium shadow-lg transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={!onSendMessage || draft.trim().length === 0}
+          className="min-w-28 rounded-full bg-sky-600 px-4 py-2.5 font-medium shadow-lg transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-45"
         >
           Send
         </button>
