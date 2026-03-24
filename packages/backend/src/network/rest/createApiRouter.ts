@@ -212,14 +212,19 @@ export class ApiRouter {
         });
 
         router.get('/finished-games', async (req, res) => {
+            const currentUser = await this.authService.getUserFromRequest(req);
             const query = zFinishedGamesQuery.parse(req.query);
             const view = query.view ?? 'all';
-            const currentUser = view === 'mine'
-                ? await this.authService.getUserFromRequest(req)
-                : null;
 
             if (view === 'mine' && !currentUser) {
                 res.status(401).json({ error: 'Sign in to view your own match history.' });
+                return;
+            }
+
+            const page = query.page ?? 1;
+            const pageSize = query.pageSize ?? 20;
+            if (view !== "mine" && page * pageSize >= 500 && currentUser?.role !== "admin") {
+                res.status(401).json({ error: 'Match history limited to 500 games' });
                 return;
             }
 
