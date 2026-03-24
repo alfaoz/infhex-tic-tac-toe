@@ -1217,11 +1217,10 @@ export class SessionManager {
     private toLobbyInfo(session: ServerGameSession): LobbyInfo {
         return {
             id: session.id,
-            playerNames: session.players.map((player) => player.displayName),
             players: session.players.map((player) => ({
                 displayName: player.displayName,
                 profileId: player.profileId,
-                elo: player.rating?.eloScore ?? null
+                elo: player.rating.eloScore
             })),
             timeControl: { ...session.gameOptions.timeControl },
             rated: session.gameOptions.rated,

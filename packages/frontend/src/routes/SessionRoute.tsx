@@ -61,7 +61,7 @@ function SessionConnectingScreen({ sessionId, isConnected, onBack }: Readonly<{
   return (
 
     <div className="mx-auto flex max-w-3xl items-center justify-center h-full">
-      <div className="w-full rounded-[2rem] border border-white/10 bg-slate-950/55 p-8 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:p-10">
+      <div className="w-full rounded-4xl border border-white/10 bg-slate-950/55 p-8 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:p-10">
         <div className="text-xs uppercase tracking-[0.32em] text-sky-200/80">Live Session</div>
         <h1 className="mt-4 text-3xl font-black uppercase tracking-[0.08em] text-white sm:text-4xl">Joining Match</h1>
         <div className="mt-4 break-all text-lg font-bold text-sky-100 sm:text-2xl">{sessionId}</div>

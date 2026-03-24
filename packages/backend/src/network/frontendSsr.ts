@@ -61,8 +61,8 @@ function createQueryClient() {
 
 function sortLobbySessions(sessions: LobbyInfo[]) {
   return [...sessions].sort((leftSession, rightSession) => {
-    const leftCanJoin = leftSession.startedAt === null && leftSession.playerNames.length < 2
-    const rightCanJoin = rightSession.startedAt === null && rightSession.playerNames.length < 2
+    const leftCanJoin = leftSession.startedAt === null && leftSession.players.length < 2
+    const rightCanJoin = rightSession.startedAt === null && rightSession.players.length < 2
 
     if (leftCanJoin !== rightCanJoin) {
       return leftCanJoin ? -1 : 1

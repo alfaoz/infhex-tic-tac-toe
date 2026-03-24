@@ -1,6 +1,6 @@
 import type { BoardState, GameState } from '@ih3t/shared'
 import type { CanvasHTMLAttributes, RefObject } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
     DEFAULT_SCALE,
     GRID_LINE_COLOR,

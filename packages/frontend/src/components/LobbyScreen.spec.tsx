@@ -31,7 +31,6 @@ const shutdownState: ShutdownState = {
 
 const openLobby: LobbyInfo = {
   id: 'OPEN123',
-  playerNames: [],
   players: [],
   timeControl: {
     mode: 'turn',
@@ -43,7 +42,6 @@ const openLobby: LobbyInfo = {
 
 const ratedLobby: LobbyInfo = {
   id: 'RATED456',
-  playerNames: ['Ranked Host'],
   players: [
     {
       displayName: 'Ranked Host',
@@ -62,17 +60,16 @@ const ratedLobby: LobbyInfo = {
 
 const activeLobby: LobbyInfo = {
   id: 'ACTIVE789',
-  playerNames: ['Alpha', 'Bravo'],
   players: [
     {
       displayName: 'Alpha',
       profileId: 'alpha',
-      elo: null,
+      elo: 0,
     },
     {
       displayName: 'Bravo',
       profileId: 'bravo',
-      elo: null,
+      elo: 0,
     },
   ],
   timeControl: {
@@ -84,7 +81,6 @@ const activeLobby: LobbyInfo = {
 
 const ownRatedLobby: LobbyInfo = {
   id: 'OWNSEAT42',
-  playerNames: [signedInAccount.username],
   players: [
     {
       displayName: signedInAccount.username,

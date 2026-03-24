@@ -490,13 +490,12 @@ export type SessionParticipant = z.infer<typeof zSessionParticipant>;
 export const zLobbyListParticipant = z.object({
     displayName: z.string(),
     profileId: zIdentifier.nullable(),
-    elo: z.number().int().nullable().default(null)
+    elo: z.number().int()
 });
 export type LobbyListParticipant = z.infer<typeof zLobbyListParticipant>;
 
 export const zLobbyInfo = z.object({
     id: zIdentifier,
-    playerNames: z.array(z.string()),
     players: z.array(zLobbyListParticipant).default([]),
     timeControl: zGameTimeControl,
     rated: z.boolean().default(false),

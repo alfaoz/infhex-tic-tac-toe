@@ -81,7 +81,7 @@ function LobbyScreen({
     return () => window.clearInterval(interval)
   }, [])
 
-  const canJoinSession = (session: LobbyInfo) => session.startedAt === null && session.playerNames.length < 2
+  const canJoinSession = (session: LobbyInfo) => session.startedAt === null && session.players.length < 2
   const isJoinBlockedForGuest = (session: LobbyInfo) => session.rated && !account
   const isJoinBlockedForOwnRatedSeat = (session: LobbyInfo) =>
     session.rated
@@ -172,7 +172,7 @@ function LobbyScreen({
                 onClick={onViewChangelog}
                 className="mt-5 self-start inline-flex items-center gap-3 rounded-2xl border border-sky-300/25 bg-sky-400/10 px-4 py-3 text-left text-sm text-sky-100 transition hover:-translate-y-0.5 hover:border-sky-200/35 hover:bg-sky-400/18 hover:text-white"
               >
-                <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.6)]" />
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.6)]" />
                 <span className="flex flex-col">
                   <span className="font-semibold">
                     {unreadChangelogEntries} new feature{unreadChangelogEntries === 1 ? '' : 's'} dropped
@@ -181,7 +181,7 @@ function LobbyScreen({
                     View changelog
                   </span>
                 </span>
-                <span className="ml-1 flex-shrink-0 text-sky-200/85">
+                <span className="ml-1 shrink-0 text-sky-200/85">
                   <ChangelogLinkIcon />
                 </span>
               </button>
@@ -190,7 +190,7 @@ function LobbyScreen({
 
         </section>
 
-        <section className="max-w-xl rounded-[2rem] border border-white/10 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:h-[34rem] sm:bg-slate-950/55 md:p-8 lg:flex lg:flex-col">
+        <section className="max-w-xl rounded-4xl border border-white/10 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:min-h-[34rem] sm:h-[34rem] sm:bg-slate-950/55 md:p-8 lg:flex lg:flex-col">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-sky-200/80">Live Sessions</p>

@@ -74,7 +74,6 @@ function FinishedGamesScreen({
   errorMessage,
   onOpenGame,
   onChangePage,
-  onRefresh
 }: Readonly<FinishedGamesScreenProps>) {
   const isOwnArchive = archiveView === 'mine'
   const games = archive?.games ?? []

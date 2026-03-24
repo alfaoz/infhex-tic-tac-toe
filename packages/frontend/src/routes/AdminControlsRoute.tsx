@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router'
+import { Navigate } from 'react-router'
 import { toast } from 'react-toastify'
 import {
   broadcastAdminMessage,
@@ -27,7 +27,6 @@ function showErrorToast(message: string) {
 }
 
 function AdminControlsRoute() {
-  const navigate = useNavigate()
   const shutdown = useLiveGameStore(state => state.shutdown)
   const accountQuery = useQueryAccount({ enabled: true })
   const isAdmin = accountQuery.data?.user?.role === 'admin'
@@ -179,8 +178,6 @@ function AdminControlsRoute() {
         onCancel={() => void handleCancel()}
         onSendMessage={() => void handleSendMessage()}
         onTerminateGame={(sessionId) => void handleTerminateGame(sessionId)}
-        onBack={() => void navigate('/')}
-        onOpenStats={() => void navigate('/admin/stats')}
       />
     )
   }
@@ -214,8 +211,6 @@ function AdminControlsRoute() {
       onCancel={() => void handleCancel()}
       onSendMessage={() => void handleSendMessage()}
       onTerminateGame={(sessionId) => void handleTerminateGame(sessionId)}
-      onBack={() => void navigate('/')}
-      onOpenStats={() => void navigate('/admin/stats')}
     />
   )
 }
