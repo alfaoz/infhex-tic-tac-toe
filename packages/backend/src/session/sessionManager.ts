@@ -1320,7 +1320,7 @@ export class SessionManager {
                 );
 
                 const eloAdjustment = player.id === winningPlayerId ? adjustment.eloGain : adjustment.eloLoss;
-                eloAdjustments.set(player.profileId, eloAdjustment)
+                eloAdjustments.set(player.id, eloAdjustment)
             }
 
             const gameId = await this.ensureGameHistory(session);
