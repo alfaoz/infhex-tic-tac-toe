@@ -11,9 +11,7 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.node.json eslint.config.js ./
-COPY packages/backend/package.json packages/backend/package.json
-COPY packages/frontend/package.json packages/frontend/package.json
-COPY packages/shared/package.json packages/shared/package.json
+COPY --parents packages/*/package.json .
 
 RUN pnpm install --frozen-lockfile
 
@@ -35,8 +33,6 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.node.json eslint.config.js ./
 COPY packages/backend/package.json packages/backend/package.json
-COPY packages/frontend/package.json packages/frontend/package.json
-COPY packages/shared/package.json packages/shared/package.json
 
 COPY --from=build /app/packages/backend/dist/ ./packages/backend/dist/
 COPY --from=build /app/packages/frontend/dist/ ./packages/frontend/dist/

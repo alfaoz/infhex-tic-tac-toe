@@ -1,4 +1,4 @@
-import type { LobbyOptions, PlayerNames } from '@ih3t/shared'
+import type { LobbyOptions } from '@ih3t/shared'
 import { formatTimeControl } from '../utils/gameTimeControl'
 import ScreenFooter from './ScreenFooter'
 

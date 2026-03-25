@@ -3,6 +3,7 @@ import {
     cloneGameState,
     createStartedGameState,
     GameRuleError,
+    type HexCoordinate,
     type SandboxGamePosition,
     type SandboxPlayerSlot,
     type SandboxPositionResponse,
@@ -15,7 +16,9 @@ import { useLocation, useNavigate, useParams } from 'react-router'
 import { toast } from 'react-toastify'
 import GameBoardCanvas from '../components/game-screen/GameBoardCanvas'
 import useGameBoard from '../components/game-screen/useGameBoard'
+import SandboxBotFactoryModal from '../components/sandbox/SandboxBotFactoryModal'
 import SandboxHud from '../components/sandbox/SandboxHud'
+import SandboxBotPanel from '../components/sandbox/SandboxBotPanel'
 import SandboxImportModal from '../components/sandbox/SandboxImportModal'
 import SandboxShareModal from '../components/sandbox/SandboxShareModal'
 import SandboxTurnIndicator from '../components/sandbox/SandboxTurnIndicator'
@@ -24,8 +27,16 @@ import SandboxWinnerBanner from '../components/sandbox/SandboxWinnerBanner'
 import { useQueryAccount } from '../query/accountClient'
 import { queryKeys } from '../query/queryDefinitions'
 import { createSandboxPosition, fetchSandboxPosition, useQuerySandboxPosition } from '../query/sandboxClient'
+import {
+    createDefaultSandboxPlayerModes,
+    persistSandboxBotTimeoutMs,
+    readSandboxBotTimeoutMs,
+    sanitizeSandboxBotTimeoutMs
+} from '../sandbox/sandboxBotSettings'
+import { useSandboxBotController } from '../sandbox/useSandboxBotController'
 import type { SandboxRouteState } from './sandboxRouteState'
 import { playTilePlacedSound } from '../soundEffects'
+import { kSandboxBotEngines, SandboxBotEngineInfo } from '../sandbox/botLoader'
 
 interface SandboxSnapshot {
     positionName: string | null
@@ -168,8 +179,15 @@ function SandboxRoute() {
     const [isShareModalOpen, setIsShareModalOpen] = useState(false)
     const [shareUrl, setShareUrl] = useState<string | null>(null)
     const [isCopyingShareUrl, setIsCopyingShareUrl] = useState(false)
+    const [botPlayerModes, setBotPlayerModes] = useState(() => createDefaultSandboxPlayerModes())
+    const [botTimeoutMs, setBotTimeoutMs] = useState(() => readSandboxBotTimeoutMs())
+    const [selectedBotEngine, setSelectedBotEngine] = useState<SandboxBotEngineInfo | null>(null)
+    const [isBotPanelOpen, setIsBotPanelOpen] = useState(false)
+    const [isBotFactoryModalOpen, setIsBotFactoryModalOpen] = useState(false)
     const cleanBoardStateRef = useRef(createSandboxGameState())
     const previousCellCountRef = useRef(gameState.cells.length)
+    const latestGameStateRef = useRef(gameState)
+    const latestGameHistoryRef = useRef(gameHistory)
     const lastLoadedPositionIdRef = useRef<string | null>(null)
     const lastInvalidRoutePositionIdRef = useRef<string | null>(null)
     const lastAppliedLocationKeyRef = useRef<string | null>(null)
@@ -181,7 +199,14 @@ function SandboxRoute() {
     const currentBoardStateKey = getSandboxPositionKey(gameState)
     const currentPositionName = loadedSnapshot?.positionName ?? null
     const isAuthenticated = Boolean(accountQuery.data?.user)
+    const currentTurnPlayerSlot = gameState.currentTurnPlayerId
+        ? getSandboxPlayerSlot(gameState.currentTurnPlayerId)
+        : null
+    const isCurrentTurnBotControlled = currentTurnPlayerSlot
+        ? botPlayerModes[currentTurnPlayerSlot] === 'bot'
+        : false
     const localPlayerId = gameState.winner === null
+        && !isCurrentTurnBotControlled
         ? (gameState.currentTurnPlayerId ?? SANDBOX_PLAYERS[0]!.id)
         : null
     const canTakeBack = gameHistory.length > 0
@@ -197,6 +222,40 @@ function SandboxRoute() {
         Boolean(normalizedRoutePositionId)
         && routeSandboxPositionQuery.isFetching
         && lastLoadedPositionIdRef.current !== normalizedRoutePositionId
+    const botPlayerIds = SANDBOX_PLAYERS
+        .filter((player) => botPlayerModes[getSandboxPlayerSlot(player.id)] === 'bot')
+        .map((player) => player.id)
+    const isSandboxInteractionEnabled =
+        !isWelcomeModalVisible
+        && !isWinnerBannerVisible
+        && !isImportModalOpen
+        && !isImportingPosition
+        && !isShareModalOpen
+        && !isBotFactoryModalOpen
+        && !isRoutePositionLoading
+    const isBotPlaybackEnabled =
+        !isWelcomeModalVisible
+        && !isImportModalOpen
+        && !isImportingPosition
+        && !isShareModalOpen
+        && !isBotFactoryModalOpen
+        && !isRoutePositionLoading
+
+    const sandboxBotController = useSandboxBotController({
+        gameState,
+        botTurnEnabled: isBotPlaybackEnabled,
+        botFactory: selectedBotEngine,
+        playerModes: botPlayerModes,
+        timeoutMs: botTimeoutMs,
+        resolvePlayerSlot: getSandboxPlayerSlot,
+        onApplyBotMoves: applyBotMoves,
+        onBotError: (message) => {
+            toast.error(message, {
+                toastId: `sandbox-bot:${message}`
+            })
+        }
+    })
+    const isBotBusy = sandboxBotController.isThinking
 
     const {
         canvasRef,
@@ -208,9 +267,57 @@ function SandboxRoute() {
         gameState: gameState,
         highlightedCells: gameState.winner?.cells ?? "last",
         localPlayerId,
-        interactionEnabled: !isWelcomeModalVisible && !isWinnerBannerVisible && !isImportModalOpen && !isImportingPosition && !isShareModalOpen && !isRoutePositionLoading,
+        interactionEnabled: isSandboxInteractionEnabled,
         onPlaceCell: gameState.winner === null ? handlePlaceCell : undefined
     })
+
+    function applyBotMoves(moves: readonly HexCoordinate[]) {
+        if (moves.length === 0) {
+            return
+        }
+
+        const currentGameState = latestGameStateRef.current
+        const currentGameHistory = latestGameHistoryRef.current
+        let nextGameState = cloneGameState(currentGameState)
+        const nextGameHistory = [...currentGameHistory]
+
+        for (const move of moves) {
+            const actingPlayerId = nextGameState.currentTurnPlayerId
+            if (!actingPlayerId || nextGameState.winner) {
+                break
+            }
+
+            const previousGameState = cloneGameState(nextGameState)
+
+            try {
+                applyGameMove(nextGameState, {
+                    playerId: actingPlayerId,
+                    x: move.x,
+                    y: move.y
+                })
+            } catch (error) {
+                const errorMessage = error instanceof GameRuleError
+                    ? error.message
+                    : 'This move is not legal in sandbox mode.'
+                toast.error(errorMessage, {
+                    toastId: `sandbox:${errorMessage}`
+                })
+                break
+            }
+
+            nextGameHistory.push(previousGameState)
+        }
+
+        if (nextGameHistory.length === currentGameHistory.length) {
+            return
+        }
+
+        latestGameStateRef.current = nextGameState
+        latestGameHistoryRef.current = nextGameHistory
+        setGameHistory(nextGameHistory)
+        setGameState(nextGameState)
+        setIsWinnerBannerVisible(Boolean(nextGameState.winner))
+    }
 
     function applySandboxPosition(
         positionName: string,
@@ -221,12 +328,16 @@ function SandboxRoute() {
         const nextLoadedSnapshot = createSandboxSnapshot(nextGameState, nextGameHistory, positionName)
 
         previousCellCountRef.current = nextGameState.cells.length
+        latestGameStateRef.current = nextGameState
+        latestGameHistoryRef.current = nextGameHistory
         lastLoadedPositionIdRef.current = positionId
         lastInvalidRoutePositionIdRef.current = null
 
         setLoadedSnapshot(nextLoadedSnapshot)
         setGameHistory(nextGameHistory)
         setGameState(nextGameState)
+        setIsBotPanelOpen(false)
+        setIsBotFactoryModalOpen(false)
         setIsWinnerBannerVisible(false)
         setIsImportModalOpen(false)
         setImportModalError(null)
@@ -250,7 +361,10 @@ function SandboxRoute() {
                 y
             })
 
-            setGameHistory((currentHistory) => [...currentHistory, cloneGameState(gameState)])
+            const nextGameHistory = [...gameHistory, cloneGameState(gameState)]
+            latestGameStateRef.current = nextGameState
+            latestGameHistoryRef.current = nextGameHistory
+            setGameHistory(nextGameHistory)
             setGameState(nextGameState)
             setIsWinnerBannerVisible(Boolean(nextGameState.winner))
         } catch (error) {
@@ -271,6 +385,15 @@ function SandboxRoute() {
 
         previousCellCountRef.current = gameState.cells.length
     }, [gameState.cells.length])
+
+    useEffect(() => {
+        latestGameStateRef.current = gameState
+        latestGameHistoryRef.current = gameHistory
+    }, [gameHistory, gameState])
+
+    useEffect(() => {
+        persistSandboxBotTimeoutMs(botTimeoutMs)
+    }, [botTimeoutMs])
 
     useEffect(() => {
         if (!routePositionId) {
@@ -362,8 +485,12 @@ function SandboxRoute() {
             : []
 
         previousCellCountRef.current = nextGameState.cells.length
+        latestGameStateRef.current = nextGameState
+        latestGameHistoryRef.current = nextGameHistory
         setGameHistory(nextGameHistory)
         setGameState(nextGameState)
+        setIsBotPanelOpen(false)
+        setIsBotFactoryModalOpen(false)
         setIsWinnerBannerVisible(false)
         setShareUrl(null)
         setShareModalError(null)
@@ -377,8 +504,12 @@ function SandboxRoute() {
         }
 
         previousCellCountRef.current = previousGameState.cells.length
-        setGameHistory((currentHistory) => currentHistory.slice(0, -1))
-        setGameState(cloneGameState(previousGameState))
+        const nextGameHistory = gameHistory.slice(0, -1)
+        const nextGameState = cloneGameState(previousGameState)
+        latestGameStateRef.current = nextGameState
+        latestGameHistoryRef.current = nextGameHistory
+        setGameHistory(nextGameHistory)
+        setGameState(nextGameState)
         setIsWinnerBannerVisible(false)
         setShareUrl(null)
         setShareModalError(null)
@@ -471,6 +602,27 @@ function SandboxRoute() {
         setShareUrl(null)
     }
 
+    const handleSelectBotEngine = (engine: SandboxBotEngineInfo | null) => {
+        setSelectedBotEngine(engine)
+        if (engine === null) {
+            setBotPlayerModes(createDefaultSandboxPlayerModes())
+        }
+        setIsBotFactoryModalOpen(false)
+        setIsBotPanelOpen(true)
+    }
+
+    const handleBotPlayerModeChange = (playerSlot: SandboxPlayerSlot, nextMode: 'human' | 'bot') => {
+        setBotPlayerModes((currentModes) => ({
+            ...currentModes,
+            [playerSlot]: nextMode
+        }))
+        setIsBotPanelOpen(true)
+    }
+
+    const handleBotTimeoutMsChange = (nextTimeoutMs: number) => {
+        setBotTimeoutMs(sanitizeSandboxBotTimeoutMs(nextTimeoutMs))
+    }
+
     return (
         <div className="relative h-full w-full overflow-hidden bg-slate-950 text-white">
             {!isImportModalOpen && (
@@ -485,9 +637,14 @@ function SandboxRoute() {
                 <div className="flex h-full flex-col justify-between gap-4">
                     {!isWelcomeModalVisible && !isImportModalOpen && (
                         <SandboxTurnIndicator
-                            players={SANDBOX_PLAYERS}
+                            players={SANDBOX_PLAYERS.map(player => ({
+                                ...player,
+                                displayName: botPlayerIds.includes(player.id) ? `Bot as ${player.displayName}` : player.displayName
+                            }))}
+                            botPlayerIds={botPlayerIds}
                             gameState={gameState}
                             winnerId={gameState.winner?.playerId ?? null}
+                            isBotThinking={isBotBusy}
                         />
                     )}
 
@@ -533,23 +690,59 @@ function SandboxRoute() {
                     />
 
                     {!isWelcomeModalVisible && !isImportModalOpen && (
-                        <SandboxHud
-                            positionName={currentPositionName}
-                            isAuthenticated={isAuthenticated}
-                            occupiedCellCount={gameState.cells.length}
-                            renderableCellCount={renderableCellCount}
-                            onResetBoard={resetSandbox}
-                            onTakeBack={takeBackMove}
-                            onResetView={resetView}
-                            canTakeBack={canTakeBack}
-                            onSharePosition={() => {
-                                setShareModalError(null)
-                                setShareUrl(null)
-                                setIsShareModalOpen(true)
-                            }}
-                            canSharePosition={canSharePosition}
-                            isSharingPosition={isSharingPosition}
+                        <SandboxBotFactoryModal
+                            isOpen={isBotFactoryModalOpen}
+                            onClose={() => setIsBotFactoryModalOpen(false)}
+
+                            availableEngines={kSandboxBotEngines}
+                            selectedEngine={selectedBotEngine?.name ?? null}
+
+                            onSelectBotFactory={handleSelectBotEngine}
                         />
+                    )}
+
+                    {!isWelcomeModalVisible && !isImportModalOpen && (
+                        <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
+                            <SandboxBotPanel
+                                isOpen={isBotPanelOpen}
+                                onOpen={() => setIsBotPanelOpen(true)}
+                                onClose={() => setIsBotPanelOpen(false)}
+
+                                selectedFactory={selectedBotEngine ?? null}
+
+                                botDisplayName={sandboxBotController.botDisplayName}
+                                botCapabilities={sandboxBotController.botCapabilities}
+                                botAvailabilityMessage={sandboxBotController.botAvailabilityMessage}
+                                botErrorMessage={sandboxBotController.lastErrorMessage}
+
+                                botPlayerModes={botPlayerModes}
+                                currentTurnPlayerSlot={currentTurnPlayerSlot}
+                                botTimeoutMs={botTimeoutMs}
+                                isBotThinking={isBotBusy}
+                                isCurrentTurnBotControlled={isCurrentTurnBotControlled}
+                                onChangeBotEngine={() => setIsBotFactoryModalOpen(true)}
+                                onBotPlayerModeChange={handleBotPlayerModeChange}
+                                onBotTimeoutMsChange={handleBotTimeoutMsChange}
+                            />
+
+                            <SandboxHud
+                                positionName={currentPositionName}
+                                isAuthenticated={isAuthenticated}
+                                occupiedCellCount={gameState.cells.length}
+                                renderableCellCount={renderableCellCount}
+                                onResetBoard={resetSandbox}
+                                onTakeBack={takeBackMove}
+                                onResetView={resetView}
+                                canTakeBack={canTakeBack}
+                                onSharePosition={() => {
+                                    setShareModalError(null)
+                                    setShareUrl(null)
+                                    setIsShareModalOpen(true)
+                                }}
+                                canSharePosition={canSharePosition}
+                                isSharingPosition={isSharingPosition}
+                            />
+                        </div>
                     )}
                 </div>
             </div>

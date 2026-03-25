@@ -5,12 +5,16 @@ interface SandboxTurnIndicatorProps {
   players: SessionParticipant[]
   gameState: GameState
   winnerId: string | null
+  botPlayerIds?: readonly string[]
+  isBotThinking?: boolean
 }
 
 function SandboxTurnIndicator({
   players,
   gameState,
-  winnerId
+  winnerId,
+  botPlayerIds = [],
+  isBotThinking = false
 }: Readonly<SandboxTurnIndicatorProps>) {
   const playerIds = players.map(player => player.id)
   const playerNames = Object.fromEntries(players.map(player => [player.id, player.displayName]))
@@ -20,13 +24,18 @@ function SandboxTurnIndicator({
     ? getPlayerTileColor(gameState.playerTiles, focusPlayerId)
     : '#7dd3fc'
   const placementsRemaining = gameState.placementsRemaining
+  const isBotTurn = !winnerId && Boolean(focusPlayerId && botPlayerIds.includes(focusPlayerId))
 
   const headline = winnerId
     ? `${focusPlayerLabel} Wins`
     : `${focusPlayerLabel} To Move`
   const detail = winnerId
     ? 'Start a new board to keep exploring lines.'
-    : `${placementsRemaining} ${placementsRemaining === 1 ? 'placement' : 'placements'} left this turn.`
+    : isBotTurn && isBotThinking
+      ? `Bot is thinking with ${placementsRemaining} ${placementsRemaining === 1 ? 'placement' : 'placements'} left this turn.`
+      : isBotTurn
+        ? `Bot-controlled turn with ${placementsRemaining} ${placementsRemaining === 1 ? 'placement' : 'placements'} left.`
+        : `${placementsRemaining} ${placementsRemaining === 1 ? 'placement' : 'placements'} left this turn.`
 
   return (
     <div className="absolute left-3 right-3 top-3 flex justify-center md:left-0 md:right-0">

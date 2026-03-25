@@ -1,0 +1,1 @@
+import "@ih3t/bot-worker";

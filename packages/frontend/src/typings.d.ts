@@ -1,5 +1,6 @@
 import 'vite/client';
 import type { DehydratedState } from '@tanstack/react-query';
+import type { BotEngineInterface } from '@ih3t/shared';
 
 declare module '*.aac' {
   const sourceUrl: string;

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-export const DUMMY = 'Hello?';
+export * from "./botInterface";
+export * from "./botWorkerProtocol";
+
 export const PLACE_CELL_HEX_RADIUS = 8;
 const WINNING_LINE_LENGTH = 6;
 export type { ChangelogDay, ChangelogEntry, ChangelogEntryKind } from './changelogTypes';
