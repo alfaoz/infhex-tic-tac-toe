@@ -739,7 +739,17 @@ export class GameHistoryRepository {
                         ]
                     },
                     postGameElo: {
-                        $add: ['$players.elo', '$players.eloChange']
+                        $add: [
+                            '$players.elo',
+                            {
+                                /* 
+                                 * As we do want the highest ELO it's ether the starting ELO or 
+                                 * the ELO after the match in case of a win. Hence just taking the
+                                 * maximum removes the ELO loss.
+                                 */
+                                $max: ['$players.eloChange', 0]
+                            }
+                        ]
                     }
                 }
             },

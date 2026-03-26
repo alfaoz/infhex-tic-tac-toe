@@ -462,7 +462,7 @@ function EloHistoryChartSection({
                             labelFormatter={(label) => formatDateTime(Number(label))}
                         />
                         <Line
-                            type="basisOpen"
+                            type="monotone"
                             dataKey="elo"
                             stroke="#7dd3fc"
                             strokeWidth={3}
