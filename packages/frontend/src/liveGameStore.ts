@@ -27,6 +27,7 @@ interface LiveGameStoreState {
     connection: {
         isConnected: boolean
         isInitialized: boolean
+        isUnstable: boolean
     }
 
     session: ActiveSession | null
@@ -35,6 +36,7 @@ interface LiveGameStoreState {
     onSocketConnected: () => void
     onSocketInitialized: () => void
     onSocketDisconnected: () => void
+    setConnectionUnstable: (isUnstable: boolean) => void
 
     startJoiningSession: (sessionId: string) => void
     failJoiningSession: (sessionId: string, errorMessage: string) => void
@@ -54,6 +56,7 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
         connection: {
             isConnected: false,
             isInitialized: false,
+            isUnstable: false,
             currentPlayerId: ''
         },
         pendingSessionJoin: { status: 'idle', sessionId: null, errorMessage: null },
@@ -63,15 +66,21 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
         onSocketConnected: () => set(state => {
             state.connection.isConnected = true
             state.connection.isInitialized = false
+            state.connection.isUnstable = false
             state.session = null
         }),
         onSocketInitialized: () => set(state => {
             state.connection.isInitialized = true
+            state.connection.isUnstable = false
         }),
         onSocketDisconnected: () => set(state => {
             state.connection.isConnected = false
             state.connection.isInitialized = false
+            state.connection.isUnstable = false
             state.pendingSessionJoin = { status: 'idle', sessionId: null, errorMessage: null }
+        }),
+        setConnectionUnstable: (isUnstable) => set(state => {
+            state.connection.isUnstable = state.connection.isConnected && isUnstable
         }),
 
         startJoiningSession: (sessionId) => set(state => {

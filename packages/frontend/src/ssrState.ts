@@ -22,7 +22,7 @@ export function useIsSsrRender() {
 */
 export function useSsrCompatibleNow() {
     const isSsrRender = useIsSsrRender();
-    return kSsrRenderTimestamp ?? Date.now();
+    return isSsrRender ? kSsrRenderTimestamp : Date.now();
 }
 
 export function getInitialRenderTimestamp() {

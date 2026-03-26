@@ -413,6 +413,7 @@ function SessionRoute() {
                 gameState={gameState}
 
                 shutdown={shutdown}
+                showConnectionUnstableBadge={connection.isUnstable}
 
                 chat={session.chat}
                 isChatOpen={isChatOpen}

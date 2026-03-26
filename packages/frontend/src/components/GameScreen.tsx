@@ -19,6 +19,7 @@ interface GameScreenProps {
     currentPlayerId: string
     gameState: GameState
     shutdown: ShutdownState | null
+    showConnectionUnstableBadge?: boolean
     onPlaceCell: (x: number, y: number) => void
     onLeave: () => void
     leaveLabel?: string
@@ -42,6 +43,7 @@ function GameScreen({
     currentPlayerId,
     gameState,
     shutdown,
+    showConnectionUnstableBadge = false,
     onPlaceCell,
     onLeave,
     leaveLabel,
@@ -158,6 +160,7 @@ function GameScreen({
                         renderableCellCount={renderableCellCount}
 
                         shutdown={shutdown}
+                        showConnectionUnstableBadge={showConnectionUnstableBadge}
 
                         leaveLabel={leaveLabel}
                         onLeave={onLeave}

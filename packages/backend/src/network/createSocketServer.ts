@@ -138,6 +138,10 @@ export class SocketServerGateway {
         socket.emit('shutdown-updated', this.serverShutdownService.getShutdownState());
 
         const participationMutex = new Mutex();
+        this.bindSocketHandler(socket, 'client-ping', z.any(), async _request => {
+            socket.emit('server-pong');
+        });
+
         this.bindSocketHandler(socket, "join-session", zJoinSessionRequest, async request => {
             await participationMutex.runExclusive(async () => {
                 const existingParticipation = this.sessionManager.findParticipationFromSocketId(socket.id);

@@ -13,7 +13,18 @@ import { sortLobbySessions } from './utils/lobby'
 import { queryKeys } from './query/queryDefinitions'
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null
+
 let shouldHandleDisconnect = true
+let suppressDisconnectToast = false
+
+let heartbeatMonitor: ReturnType<typeof window.setInterval> | null = null
+let heartbeatLastPingAt: number | null = null
+let heartbeatLastPongAt: number | null = null
+
+const HEARTBEAT_INTERVAL_MS = 250
+const HEARTBEAT_PING_INTERVAL_MS = 1_000
+const HEARTBEAT_UNSTABLE_AFTER_MS = 2_000
+const HEARTBEAT_RECONNECT_AFTER_MS = 10_000
 
 function showErrorToast(message: string) {
     toast.error(message, {
@@ -40,6 +51,73 @@ function navigateToSession(sessionId: string) {
 
 function isVersionMismatchMessage(message: string) {
     return message.includes('version hash')
+}
+
+function clearHeartbeatState() {
+    heartbeatLastPingAt = null
+    heartbeatLastPongAt = null
+    useLiveGameStore.getState().setConnectionUnstable(false)
+}
+
+function isHeartbeatActive() {
+    if (!socket?.connected || typeof document === 'undefined') {
+        return false
+    }
+
+    const activeSession = useLiveGameStore.getState().session
+    return activeSession?.state.status === 'in-game' && document.visibilityState === 'visible'
+}
+
+function reconnectAfterHeartbeatTimeout() {
+    if (!socket) {
+        return
+    }
+
+    clearHeartbeatState()
+    suppressDisconnectToast = true
+    socket.disconnect()
+    socket.connect()
+}
+
+function executeHeartbeat() {
+    if (!isHeartbeatActive()) {
+        clearHeartbeatState();
+        return
+    }
+
+    const now = Date.now()
+
+    /* 50ms grace due to setInterval inaccuracy */
+    if (now - (heartbeatLastPingAt ?? 0) >= HEARTBEAT_PING_INTERVAL_MS - 50) {
+        socket?.emit("client-ping");
+        heartbeatLastPingAt = now;
+    }
+
+    if (!heartbeatLastPongAt) {
+        /*
+         * If we just started pinging and never received any pong
+         * assume a virtual "pong" right now.
+         */
+        heartbeatLastPongAt = now;
+    }
+
+    const lastPongMs = now - heartbeatLastPongAt;
+
+    useLiveGameStore.getState().setConnectionUnstable(lastPongMs >= HEARTBEAT_UNSTABLE_AFTER_MS)
+    if (lastPongMs >= HEARTBEAT_RECONNECT_AFTER_MS) {
+        reconnectAfterHeartbeatTimeout()
+    }
+}
+
+function startHeartbeatMonitor() {
+    if (heartbeatMonitor || typeof window === 'undefined') {
+        return
+    }
+
+    heartbeatMonitor = window.setInterval(executeHeartbeat, HEARTBEAT_INTERVAL_MS)
+    window.addEventListener('focus', executeHeartbeat)
+    window.addEventListener('blur', executeHeartbeat)
+    document.addEventListener('visibilitychange', executeHeartbeat)
 }
 
 export function startLiveGameClient() {
@@ -75,8 +153,14 @@ export function startLiveGameClient() {
         showErrorToast(message)
     })
 
-    socket.on('connect', () => useLiveGameStore.getState().onSocketConnected());
+    socket.on('connect', () => {
+        clearHeartbeatState()
+        useLiveGameStore.getState().onSocketConnected()
+    });
     socket.on('initialized', () => useLiveGameStore.getState().onSocketInitialized());
+    socket.on('server-pong', () => {
+        heartbeatLastPongAt = Date.now()
+    })
 
     socket.on('lobby-list', (lobbies) => {
         queryClient.setQueryData(
@@ -97,17 +181,24 @@ export function startLiveGameClient() {
     })
 
     socket.on('disconnect', () => {
+        clearHeartbeatState()
         if (!shouldHandleDisconnect) {
             return
         }
 
         useLiveGameStore.getState().onSocketDisconnected()
+        if (suppressDisconnectToast) {
+            suppressDisconnectToast = false
+            return
+        }
+
         showErrorToast('Disconnected from the server.')
     })
 
     socket.on('session-joined', data => {
         useLiveGameStore.getState().setupSession(data)
         navigateToSession(data.session.id)
+        executeHeartbeat()
     })
 
     socket.on('session-updated',
@@ -145,6 +236,7 @@ export function stopLiveGameClient() {
     socket.removeAllListeners()
     socket.disconnect()
     socket = null
+    suppressDisconnectToast = false
     useLiveGameStore.getState().onSocketDisconnected()
 }
 
@@ -235,4 +327,10 @@ if (typeof window !== "undefined") {
      * This should speed up the initial connect process.
      */
     startLiveGameClient();
+
+    /*
+     * Start the heartbeat monitor regardless of if we're connected.
+     * While disconnected, it will do nothing.
+     */
+    startHeartbeatMonitor()
 }

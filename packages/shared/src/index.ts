@@ -684,6 +684,7 @@ export const zServerToClientEvents = z.custom<{
     'lobby-list': (lobbies: LobbyInfo[]) => void;
     'shutdown-updated': (shutdown: ShutdownState | null) => void;
     'admin-message': (broadcast: AdminBroadcastMessage) => void;
+    'server-pong': () => void;
 
     'session-joined': (data: SessionJoinedEvent) => void;
     'session-updated': (data: SessionUpdatedEvent) => void;
@@ -697,6 +698,7 @@ export const zServerToClientEvents = z.custom<{
 export type ServerToClientEvents = z.infer<typeof zServerToClientEvents>;
 
 export const zClientToServerEvents = z.custom<{
+    'client-ping': () => void;
     'join-session': (request: JoinSessionRequest) => void;
     'leave-session': (sessionId: string) => void;
     'surrender-session': (sessionId: string) => void;
