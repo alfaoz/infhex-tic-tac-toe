@@ -12,6 +12,7 @@ import FinishedGamesRoute from './routes/FinishedGamesRoute'
 import LeaderboardRoute from './routes/LeaderboardRoute'
 import LobbyRoute from './routes/LobbyRoute'
 import ProfileRoute from './routes/ProfileRoute'
+import RulesRoute from './routes/RulesRoute'
 import SandboxRoute from './routes/SandboxRoute'
 import SessionRoute from './routes/SessionRoute'
 import { useIsSsrRender } from './ssrState'
@@ -47,6 +48,7 @@ export function createAppRoutes() {
           <Route path="/games" element={<FinishedGamesRoute />} />
           <Route path="/games/:gameId" element={<FinishedGameRoute />} />
           <Route path="/changelog" element={<ChangelogRoute />} />
+          <Route path="/rules" element={<RulesRoute />} />
           <Route path="/account/profile" element={<ProfileRoute />} />
           <Route path="/account/preferences" element={<AccountPreferencesRoute />} />
           <Route path="/account/games" element={<FinishedGamesRoute />} />

@@ -408,6 +408,14 @@ export class HttpApplication {
             };
         }
 
+        if (req.path === '/rules') {
+            return {
+                ...defaultMetadata,
+                title: `Rules • ${DEFAULT_PAGE_TITLE}`,
+                description: 'Learn the Infinity Hexagonal Tic-Tac-Toe rules: turn order, legal placements, the 8-cell placement limit, and how to win with 6 in a row.'
+            };
+        }
+
         if (req.path === '/account/games') {
             return {
                 ...defaultMetadata,
