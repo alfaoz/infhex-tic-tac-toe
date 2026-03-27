@@ -161,7 +161,7 @@ function SessionRoute() {
 
     const shutdown = useQueryServerShutdown().data ?? null;
     const { data: account } = useQueryAccount({ enabled: true })
-    const { data: accountPreferences } = useQueryAccountPreferences({ enabled: account !== null })
+    const { data: accountPreferences } = useQueryAccountPreferences({ enabled: account?.user !== null })
     const availableSessionsQuery = useQueryAvailableSessions({ enabled: true })
 
     const blockSessionJoinRef = useRef<boolean>(false)

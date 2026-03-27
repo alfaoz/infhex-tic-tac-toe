@@ -167,7 +167,7 @@ function SandboxRoute() {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
     const { data: account } = useQueryAccount({ enabled: true })
-    const { data: accountPreferences } = useQueryAccountPreferences({ enabled: account !== null })
+    const { data: accountPreferences } = useQueryAccountPreferences({ enabled: account?.user !== null })
 
     const { positionId: routePositionId } = useParams<{ positionId?: string }>()
     const [gameState, setGameState] = useState(() => createSandboxGameState())
@@ -673,102 +673,102 @@ function SandboxRoute() {
                             />
                         )}
 
-                    {!isWelcomeModalVisible && !isImportModalOpen && (
-                        <SandboxWinnerBanner
-                            players={SANDBOX_PLAYERS}
-                            gameState={gameState}
-                            winnerId={isWinnerBannerVisible ? gameState.winner?.playerId ?? null : null}
-                            onResetBoard={resetSandbox}
-                            onExploreBoard={() => setIsWinnerBannerVisible(false)}
-                        />
-                    )}
-
-                    <SandboxWelcomeModal
-                        isOpen={isWelcomeModalVisible}
-                        onStartCleanBoard={() => setIsWelcomeModalVisible(false)}
-                        onImportPosition={() => {
-                            setIsWelcomeModalVisible(false)
-                            setIsImportModalOpen(true)
-                        }}
-                    />
-
-                    <SandboxImportModal
-                        isOpen={isImportModalOpen}
-                        isLoading={isImportingPosition}
-                        errorMessage={importModalError}
-                        parsePositionId={extractSandboxPositionId}
-                        onClose={closeImportModal}
-                        onImport={(positionId) => void importPosition(positionId)}
-                        onInputChange={() => setImportModalError(null)}
-                    />
-
-                    <SandboxShareModal
-                        isOpen={isShareModalOpen}
-                        isCreating={isSharingPosition}
-                        isCopying={isCopyingShareUrl}
-                        shareUrl={shareUrl}
-                        initialName={currentPositionName}
-                        errorMessage={shareModalError}
-                        onClose={closeShareModal}
-                        onCreate={(name) => void sharePosition(name)}
-                        onCopy={() => void copyShareUrl()}
-                    />
-
-                    {!isWelcomeModalVisible && !isImportModalOpen && (
-                        <SandboxBotFactoryModal
-                            isOpen={isBotFactoryModalOpen}
-                            onClose={() => setIsBotFactoryModalOpen(false)}
-
-                            availableEngines={kSandboxBotEngines}
-                            selectedEngine={selectedBotEngine?.name ?? null}
-
-                            onSelectBotFactory={handleSelectBotEngine}
-                        />
-                    )}
-
-                    {!isWelcomeModalVisible && !isImportModalOpen && (
-                        <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
-                            <SandboxBotPanel
-                                isOpen={isBotPanelOpen}
-                                onOpen={() => setIsBotPanelOpen(true)}
-                                onClose={() => setIsBotPanelOpen(false)}
-
-                                selectedFactory={selectedBotEngine ?? null}
-
-                                botDisplayName={sandboxBotController.botDisplayName}
-                                botCapabilities={sandboxBotController.botCapabilities}
-                                botAvailabilityMessage={sandboxBotController.botAvailabilityMessage}
-                                botErrorMessage={sandboxBotController.lastErrorMessage}
-
-                                botPlayerModes={botPlayerModes}
-                                currentTurnPlayerSlot={currentTurnPlayerSlot}
-                                botTimeoutMs={botTimeoutMs}
-                                isBotThinking={isBotBusy}
-                                isCurrentTurnBotControlled={isCurrentTurnBotControlled}
-                                onChangeBotEngine={() => setIsBotFactoryModalOpen(true)}
-                                onBotPlayerModeChange={handleBotPlayerModeChange}
-                                onBotTimeoutMsChange={handleBotTimeoutMsChange}
-                            />
-
-                            <SandboxHud
-                                positionName={currentPositionName}
-                                isAuthenticated={isAuthenticated}
-                                occupiedCellCount={gameState.cells.length}
-                                renderableCellCount={renderableCellCount}
+                        {!isWelcomeModalVisible && !isImportModalOpen && (
+                            <SandboxWinnerBanner
+                                players={SANDBOX_PLAYERS}
+                                gameState={gameState}
+                                winnerId={isWinnerBannerVisible ? gameState.winner?.playerId ?? null : null}
                                 onResetBoard={resetSandbox}
-                                onTakeBack={takeBackMove}
-                                onResetView={resetView}
-                                canTakeBack={canTakeBack}
-                                onSharePosition={() => {
-                                    setShareModalError(null)
-                                    setShareUrl(null)
-                                    setIsShareModalOpen(true)
-                                }}
-                                canSharePosition={canSharePosition}
-                                isSharingPosition={isSharingPosition}
+                                onExploreBoard={() => setIsWinnerBannerVisible(false)}
                             />
-                        </div>
-                    )}
+                        )}
+
+                        <SandboxWelcomeModal
+                            isOpen={isWelcomeModalVisible}
+                            onStartCleanBoard={() => setIsWelcomeModalVisible(false)}
+                            onImportPosition={() => {
+                                setIsWelcomeModalVisible(false)
+                                setIsImportModalOpen(true)
+                            }}
+                        />
+
+                        <SandboxImportModal
+                            isOpen={isImportModalOpen}
+                            isLoading={isImportingPosition}
+                            errorMessage={importModalError}
+                            parsePositionId={extractSandboxPositionId}
+                            onClose={closeImportModal}
+                            onImport={(positionId) => void importPosition(positionId)}
+                            onInputChange={() => setImportModalError(null)}
+                        />
+
+                        <SandboxShareModal
+                            isOpen={isShareModalOpen}
+                            isCreating={isSharingPosition}
+                            isCopying={isCopyingShareUrl}
+                            shareUrl={shareUrl}
+                            initialName={currentPositionName}
+                            errorMessage={shareModalError}
+                            onClose={closeShareModal}
+                            onCreate={(name) => void sharePosition(name)}
+                            onCopy={() => void copyShareUrl()}
+                        />
+
+                        {!isWelcomeModalVisible && !isImportModalOpen && (
+                            <SandboxBotFactoryModal
+                                isOpen={isBotFactoryModalOpen}
+                                onClose={() => setIsBotFactoryModalOpen(false)}
+
+                                availableEngines={kSandboxBotEngines}
+                                selectedEngine={selectedBotEngine?.name ?? null}
+
+                                onSelectBotFactory={handleSelectBotEngine}
+                            />
+                        )}
+
+                        {!isWelcomeModalVisible && !isImportModalOpen && (
+                            <div className={"absolute inset-0 flex flex-col justify-end pointer-events-none"}>
+                                <SandboxBotPanel
+                                    isOpen={isBotPanelOpen}
+                                    onOpen={() => setIsBotPanelOpen(true)}
+                                    onClose={() => setIsBotPanelOpen(false)}
+
+                                    selectedFactory={selectedBotEngine ?? null}
+
+                                    botDisplayName={sandboxBotController.botDisplayName}
+                                    botCapabilities={sandboxBotController.botCapabilities}
+                                    botAvailabilityMessage={sandboxBotController.botAvailabilityMessage}
+                                    botErrorMessage={sandboxBotController.lastErrorMessage}
+
+                                    botPlayerModes={botPlayerModes}
+                                    currentTurnPlayerSlot={currentTurnPlayerSlot}
+                                    botTimeoutMs={botTimeoutMs}
+                                    isBotThinking={isBotBusy}
+                                    isCurrentTurnBotControlled={isCurrentTurnBotControlled}
+                                    onChangeBotEngine={() => setIsBotFactoryModalOpen(true)}
+                                    onBotPlayerModeChange={handleBotPlayerModeChange}
+                                    onBotTimeoutMsChange={handleBotTimeoutMsChange}
+                                />
+
+                                <SandboxHud
+                                    positionName={currentPositionName}
+                                    isAuthenticated={isAuthenticated}
+                                    occupiedCellCount={gameState.cells.length}
+                                    renderableCellCount={renderableCellCount}
+                                    onResetBoard={resetSandbox}
+                                    onTakeBack={takeBackMove}
+                                    onResetView={resetView}
+                                    canTakeBack={canTakeBack}
+                                    onSharePosition={() => {
+                                        setShareModalError(null)
+                                        setShareUrl(null)
+                                        setIsShareModalOpen(true)
+                                    }}
+                                    canSharePosition={canSharePosition}
+                                    isSharingPosition={isSharingPosition}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
