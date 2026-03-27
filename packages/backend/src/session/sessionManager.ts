@@ -1263,13 +1263,17 @@ export class SessionManager {
     private toLobbyInfo(session: ServerGameSession): LobbyInfo {
         return {
             id: session.id,
+
             players: session.players.map((player) => ({
                 displayName: player.displayName,
                 profileId: player.profileId,
                 elo: player.rating.eloScore
             })),
+
             timeControl: { ...session.gameOptions.timeControl },
             rated: session.gameOptions.rated,
+
+            createdAt: session.createdAt,
             startedAt: session.state === 'in-game' ? (session.startedAt ?? session.createdAt) : null
         };
     }

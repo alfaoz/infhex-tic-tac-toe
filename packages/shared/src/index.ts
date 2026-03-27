@@ -497,8 +497,11 @@ export type LobbyListParticipant = z.infer<typeof zLobbyListParticipant>;
 export const zLobbyInfo = z.object({
     id: zIdentifier,
     players: z.array(zLobbyListParticipant).default([]),
+
     timeControl: zGameTimeControl,
     rated: z.boolean().default(false),
+
+    createdAt: zTimestamp,
     startedAt: zTimestamp.nullable()
 });
 export type LobbyInfo = z.infer<typeof zLobbyInfo>;
