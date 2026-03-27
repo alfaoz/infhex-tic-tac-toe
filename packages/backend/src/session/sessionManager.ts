@@ -482,7 +482,13 @@ export class SessionManager {
 
             const socketMapping: Record<string, string> = {};
             await rematchSession.lock.runExclusive(async () => {
-                rematchSession.hadPlayers = true;
+                /*
+                 * As we're setting all players connection state to disconnected,
+                 * we need to set hadPlayers to false as well, else tickSession will remove this lobby
+                 * before the socket gateway could even assign the client sockets to the new session.
+                 */
+                rematchSession.hadPlayers = false;
+
                 rematchSession.players = originalSession.players.map(player => {
                     const newParticipantId = this.createParticipantId(rematchSession);
                     participantMapping[player.id] = newParticipantId;
@@ -763,7 +769,7 @@ export class SessionManager {
                      * All players have left the session.
                      * Specators do not count.
                      */
-                    this.deleteSession(session, "empty");
+                    this.deleteSession(session, "empty-finished");
                     return;
                 }
 
