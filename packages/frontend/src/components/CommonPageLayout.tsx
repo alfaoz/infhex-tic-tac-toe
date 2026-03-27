@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { CSSProperties, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { toast } from 'react-toastify'
 import { useQueryAccount } from '../query/accountClient'
@@ -10,6 +10,20 @@ function showErrorToast(message: string) {
   toast.error(message, {
     toastId: `error:${message}`
   })
+}
+
+
+const heroHexGridStyle: CSSProperties = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104' fill='none'%3E%3Cg stroke='rgba(148,163,184,0.16)' stroke-width='1'%3E%3Cpath d='M30 1l29 17v34L30 69 1 52V18L30 1Z'/%3E%3Cpath d='M89 1l29 17v34L89 69 60 52V18L89 1Z'/%3E%3Cpath d='M60 35l29 17v34l-29 17L31 86V52l29-17Z'/%3E%3C/g%3E%3C/svg%3E")`,
+  backgroundSize: '120px 104px',
+}
+
+function HexBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 opacity-20" style={heroHexGridStyle} />
+    </div>
+  )
 }
 
 function NavigationLink({
@@ -285,6 +299,7 @@ function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
       </header>
 
       <main className={`mx-auto flex w-full ${limitWidth ? "max-w-368" : ""} min-h-0 flex-1 flex-col`}>
+        <HexBackdrop />
         <AppErrorBoundary>
           <Outlet />
         </AppErrorBoundary>

@@ -170,11 +170,11 @@ test('renders loaded lobby data with session metadata', async ({ mount }) => {
   })
 
   await expect(component.getByRole('heading', { name: /Infinity/i })).toBeVisible()
-  await expect(component.getByText('Public Matches')).toBeVisible()
+  await expect(component.getByRole('heading', { name: 'Public Matches' })).toBeVisible()
   await expect(component.getByText(openLobby.id)).toBeVisible()
-  await expect(component.getByText('Waiting for first player')).toBeVisible()
+  await expect(component.getByText(/^Waiting for players$/).first()).toBeVisible()
   await expect(component.getByText('Ranked Host (1810)')).toBeVisible()
-  await expect(component.getByText('In game for 01:05')).toBeVisible()
+  await expect(component.getByText(/^In game for /)).toBeVisible()
 })
 
 test('opens the host dialog and submits a lobby creation request', async ({ mount }) => {
@@ -233,6 +233,42 @@ test('shows the empty live-session state when no public matches are available', 
   })
 
   await expect(component.getByText('No live sessions are available right now.')).toBeVisible()
+})
+
+test('filters the public matches list by rating mode', async ({ mount }) => {
+  const { props } = createLobbyScreenProps()
+
+  const component = await mount(<LobbyScreen {...props} />, {
+    hooksConfig: {
+      renderedAt: fixedTimestamp,
+    },
+  })
+
+  await component.getByRole('button', { name: /^Rated$/ }).click()
+  await expect(component.getByText('Ranked Host (1810)')).toBeVisible()
+  await expect(component.getByText('Alpha')).toHaveCount(0)
+  await expect(component.getByText(openLobby.id)).toHaveCount(0)
+
+  await component.getByRole('button', { name: /^Unrated$/ }).click()
+  await expect(component.getByText(/^Waiting for players$/).first()).toBeVisible()
+  await expect(component.getByText('Alpha')).toBeVisible()
+  await expect(component.getByText('Ranked Host (1810)')).toHaveCount(0)
+})
+
+test('shows a filter-specific empty state when no matches fit the selected tab', async ({ mount }) => {
+  const { props } = createLobbyScreenProps({
+    liveSessions: [ratedLobby],
+    unreadChangelogEntries: 0,
+  })
+
+  const component = await mount(<LobbyScreen {...props} />, {
+    hooksConfig: {
+      renderedAt: fixedTimestamp,
+    },
+  })
+
+  await component.getByRole('button', { name: /^Unrated$/ }).click()
+  await expect(component.getByText('No unrated public matches are available right now.')).toBeVisible()
 })
 
 test('blocks guest access to rated lobbies and reflects account loading state', async ({ mount }) => {

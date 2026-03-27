@@ -1,5 +1,5 @@
 import type { AccountProfile, CreateSessionRequest, LobbyInfo, ShutdownState } from '@ih3t/shared'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import CreateLobbyDialog from './CreateLobbyDialog'
 import { useSsrCompatibleNow } from '../ssrState'
 import ScreenFooter from './ScreenFooter'
@@ -59,16 +59,16 @@ function LobbyScreen({
     }, [])
 
     return (
-        <div className="flex flex-0 flex-col px-4 py-4 text-white sm:px-6 sm:py-6 sm:min-h-0 sm:flex-1">
+        <div className="flex grow sm:h-full flex-col px-4 py-4 text-white sm:px-6 sm:py-6">
             <CreateLobbyDialog
                 isOpen={isCreateLobbyDialogOpen}
                 onClose={() => setIsCreateLobbyDialogOpen(false)}
                 account={account}
                 onCreateLobby={onHostGame}
             />
-            <div className="items-center min-h-0 mt-4 w-full ax-w-7xl flex flex-1 justify-center self-center flex-col gap-4 lg:flex-row lg:items-start lg:mt-[8vh] lg:gap-8">
-                <section className="relative flex w-full max-w-xl rounded-[1.75rem] p-6 lg:min-h-136 lg:h-136 sm:rounded-4xl sm:p-4 md:p-6">
-                    <div className="relative flex flex-1 flex-col justify-center">
+            <div className="relative z-10 mt-4 xl:mt-[7vh] flex sm:min-h-230 w-full flex-1 flex-col xl:flex-row items-stretch justify-center self-center gap-5 md:gap-8">
+                <section className="relative flex max-w-xl w-full xl:w-[40%] rounded-[1.75rem] p-6 shadow-[0_24px_70px_rgba(15,23,42,0.28)] sm:rounded-4xl sm:p-5 md:p-6 xl:min-w-130">
+                    <div className="relative flex flex-1 flex-col justify-start">
                         <div className="self-start inline-flex rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-amber-100 sm:px-4 sm:text-xs sm:tracking-[0.35em]">
                             Two Players
                         </div>
@@ -94,7 +94,7 @@ function LobbyScreen({
                             >
                                 {shutdown ? 'Restart Pending' : 'Host Match'}
                             </button>
-                            <div className={"flex flex-col sm:flex-row gap-4 lg:hidden"}>
+                            <div className="grid gap-4 sm:grid-cols-2">
                                 <button
                                     onClick={onOpenSandbox}
                                     className="w-full cursor-pointer rounded-full border border-emerald-300/25 bg-emerald-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:-translate-y-0.5 hover:bg-emerald-400/18 sm:px-7 sm:text-base sm:tracking-[0.18em]"
@@ -152,6 +152,7 @@ function LobbyScreen({
                     account={account}
                     isAccountLoading={isAccountLoading}
                     onJoinGame={onJoinGame}
+                    className="lg:col-span-7"
                 />
             </div>
 
