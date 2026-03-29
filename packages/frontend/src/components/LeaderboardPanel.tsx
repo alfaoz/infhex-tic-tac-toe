@@ -75,7 +75,7 @@ function PersonalLeaderboardCard({
 }>) {
     const queryAccount = useQueryAccount();
     if (!queryAccount.data?.user) {
-    /* user is not logged in */
+        /* user is not logged in */
         return;
     }
 
@@ -162,7 +162,7 @@ function LeaderboardCard({
                     `@min-[17em]:col-span-1 @min-[17em]:col-start-2`,
                     `sm:col-start-auto! sm:flex-row sm:w-auto sm:flex-nowrap sm:gap-x-5 sm:pt-0`,
                     `flex flex-row-reverse justify-end items-center w-full gap-x-2 sm:gap-x-4 gap-y-1.5 pt-0.5 text-left`,
-                    `overflow-hidden overscroll-contain`,
+                    `overflow-hidden`,
                 )}
                 >
                     <LeaderboardMetric label="Won" className="w-[5.5em]" value={player.gamesWon} />
@@ -191,7 +191,7 @@ export function LeaderboardSection({
                 </div>
             ) : (
                 <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-2.5">
-                    {leaderboard.players.map((player, index) => (
+                    {[...leaderboard.players, ...leaderboard.players, ...leaderboard.players].map((player, index) => (
                         <LeaderboardCard
                             key={`${player.profileId}-${index}`}
                             display={leaderboard.ownPlacement?.profileId === player.profileId ? `self` : `normal`}
