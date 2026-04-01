@@ -47,7 +47,7 @@ function WaitingScreen({
                     </div>
                 </section>
 
-                <section className="w-full relative flex h-[43rem] overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/8 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur sm:rounded-[2rem] sm:p-8 md:p-10">
+                <section className="w-full relative flex overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/8 p-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.45)] backdrop-blur h-192 sm:h-180 sm:rounded-4xl sm:p-8 md:p-10">
                     <div className="relative flex flex-1 flex-col justify-center">
                         <div className={`mx-auto inline-flex items-center rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] ${gameOptions.visibility === `private`
                             ? `border-amber-300/40 bg-amber-300/10 text-amber-100`
