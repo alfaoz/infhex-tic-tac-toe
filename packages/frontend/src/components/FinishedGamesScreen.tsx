@@ -287,15 +287,7 @@ function FinishedGamesScreen({
                                 </div>
 
                                 <div className="mt-3 text-xs text-slate-400 sm:text-right sm:text-sm">
-                                    {`Showing `}
-                                    {pageStart}
-                                    -
-                                    {pageEnd}
-                                    {` `}
-                                    of
-                                    {totalGames}
-                                    {` `}
-                                    {isOwnArchive ? `personal matches` : `archived matches`}
+                                    {`Showing ${pageStart} - ${pageEnd} of ${totalGames} ${isOwnArchive ? `personal matches` : `archived matches`}`}
                                 </div>
                             </div>
                         </div>

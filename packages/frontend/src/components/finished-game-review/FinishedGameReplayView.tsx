@@ -641,7 +641,7 @@ function FinishedGameReplayView({
                                     >
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                                                Move
+                                                {`Move `}
                                                 {move.moveNumber}
                                             </div>
 

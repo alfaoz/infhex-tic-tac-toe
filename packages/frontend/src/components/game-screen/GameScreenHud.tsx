@@ -225,7 +225,7 @@ function GameScreenHud({
                 closeTitle="Close HUD"
             >
                 <div className="text-sm uppercase tracking-[0.25em] text-sky-300">
-                    Live Match
+                    {`Live Match `}
                     {sessionId}
                 </div>
 
@@ -260,8 +260,7 @@ function GameScreenHud({
                         </div>
 
                         <div className="text-slate-300">
-                            Clock
-                            {` `}
+                            {`Clock `}
                             {formatTimeControl(gameOptions.timeControl)}
                         </div>
                     </HudInfoBlock>

@@ -133,7 +133,7 @@ function ChangelogScreen({
                                     className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition ${!hasNewEntries || isMarkingRead
                                         ? `cursor-default border border-white/10 bg-white/6 text-slate-400`
                                         : `bg-amber-300 text-slate-950 hover:-translate-y-0.5 hover:bg-amber-200`
-                                    }`}
+                                        }`}
                                 >
                                     {isMarkingRead ? `Saving...` : `Mark New Changes As Read`}
                                 </button>
@@ -184,8 +184,7 @@ function ChangelogScreen({
 
                                     <div className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-slate-200">
                                         {day.commitCount}
-                                        {` `}
-                                        change
+                                        {` change`}
                                         {day.commitCount === 1 ? `` : `s`}
                                     </div>
                                 </div>
@@ -198,7 +197,7 @@ function ChangelogScreen({
                                         className={`rounded-[1.35rem] border p-4 sm:p-5 ${entry.isBreakingChange
                                             ? `border-rose-300/30 bg-rose-500/10 shadow-[0_0_0_1px_rgba(251,113,133,0.08)]`
                                             : `border-white/10 bg-black/20`
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                             <div className="flex flex-wrap items-center gap-2">

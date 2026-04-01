@@ -42,7 +42,7 @@ function SummaryCard({
         <div className={`rounded-[1.35rem] border px-4 py-3 shadow-[0_14px_40px_rgba(15,23,42,0.2)] ${tone === `accent`
             ? `border-amber-300/25 bg-amber-300/10`
             : `border-white/10 bg-white/6`
-        }`}
+            }`}
         >
             <div className="flex items-end justify-between gap-3">
                 <div className="min-w-0 text-[0.65rem] uppercase tracking-[0.28em] text-slate-300">
@@ -112,7 +112,7 @@ function LongestGameCard({
                     </div>
 
                     <div className="mt-1 text-xs text-slate-400">
-                        Finished
+                        {`Finished `}
                         {formatDateTime(intlFormatProvider, game.finishedAt)}
                     </div>
 
@@ -148,8 +148,7 @@ function UserWindowCard({
 
             <div className="mt-1 text-xs leading-5 text-slate-400">
                 {formatDateTime(intlFormatProvider, windowStats.startAt)}
-                {` `}
-                to
+                {` to `}
                 {formatDateTime(intlFormatProvider, windowStats.endAt)}
             </div>
 
@@ -189,8 +188,7 @@ function ActiveGamesChartSection({
 
                 <div className="text-xs leading-5 text-slate-400">
                     {formatDateTime(intlFormatProvider, timeline.startAt)}
-                    {` `}
-                    to
+                    {` to `}
                     {formatDateTime(intlFormatProvider, timeline.endAt)}
                 </div>
             </div>
@@ -273,8 +271,7 @@ function IntervalSection({
 
                     <div className="mt-1 text-xs leading-5 text-slate-400">
                         {formatDateTime(intlFormatProvider, windowStats.startAt)}
-                        {` `}
-                        to
+                        {` to `}
                         {formatDateTime(intlFormatProvider, windowStats.endAt)}
                     </div>
                 </div>
@@ -325,7 +322,7 @@ function AdminStatsScreen({
 
                     {stats && (
                         <span className="inline-block text-sm text-slate-400">
-                            Last updated
+                            {`Last updated `}
                             {formatDateTime(intlFormatProvider, stats.generatedAt)}
                         </span>
                     )}

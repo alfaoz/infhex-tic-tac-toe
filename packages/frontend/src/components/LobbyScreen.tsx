@@ -94,7 +94,7 @@ function LobbyScreen({
                                 className={`sm:col-span-2 rounded-full px-6 py-3 text-sm font-semibold uppercase tracking-[0.16em] transition sm:px-7 sm:text-base sm:tracking-[0.18em] ${!isPlayingDisabled
                                     ? `cursor-pointer bg-amber-300 text-slate-900 shadow-[0_10px_35px_rgba(251,191,36,0.35)] hover:-translate-y-0.5 hover:bg-amber-200`
                                     : `cursor-not-allowed bg-slate-500/60 text-slate-200`
-                                }`}
+                                    }`}
                             >
                                 {shutdown ? `Restart Pending` : `Host Match`}
                             </button>
@@ -128,7 +128,7 @@ function LobbyScreen({
                                     </span>
 
                                     <span>
-&nbsp;
+                                        &nbsp;
                                         (
                                         <ShutdownTimer shutdown={shutdown} />
                                         ).
@@ -148,8 +148,7 @@ function LobbyScreen({
                                 <span className="flex flex-col">
                                     <span className="font-semibold">
                                         {unreadChangelogEntries}
-                                        {` `}
-                                        new feature
+                                        {` new feature`}
                                         {unreadChangelogEntries === 1 ? `` : `s`}
                                         {` `}
                                         dropped

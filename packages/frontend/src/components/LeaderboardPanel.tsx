@@ -259,7 +259,7 @@ export function LeaderboardRefreshIndicator({
             <div className="mt-3 text-sm text-emerald-50/85">
                 {`Last updated `}
                 {formatDateTime(intlFormatProvider, leaderboard.generatedAt)}
-                . Next recalculation
+                {`. Next recalculation `}
                 {formatDateTime(intlFormatProvider, leaderboard.nextRefreshAt)}
             </div>
         </div>

@@ -347,8 +347,8 @@ function AdminControlsScreen({
 
                                                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${session.rated
                                                         ? `bg-amber-300/15 text-amber-100`
-                                                        : `bg-white/8 text-slate-200`
-                                                    }`}
+                                                        : `bg-white/8 text-slate-200`}`
+                                                    }
                                                     >
                                                         {session.rated ? `Rated` : `Unrated`}
                                                     </span>
@@ -370,8 +370,7 @@ function AdminControlsScreen({
                                                     <div className="mt-1 text-sm text-slate-400">
                                                         {`Running for `}
                                                         {formatActiveSessionDuration(session.startedAt, now)}
-                                                        {` `}
-                                                        • Started
+                                                        {` • Started `}
                                                         {formatDateTime(intlFormatProvider, session.startedAt)}
                                                     </div>
                                                 )}
