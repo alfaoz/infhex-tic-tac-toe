@@ -1,15 +1,14 @@
-import type { GameState, LobbyOptions, SessionChat, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared';
+import type { GameState, LobbyOptions, SessionChat, SessionParticipant, SessionParticipantRole, SessionTournamentInfo, ShutdownState } from '@ih3t/shared';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { playTilePlacedSound } from '../soundEffects';
 import { getPlayerTileColor } from '../utils/gameBoard';
-import GameBoardCanvas from './game-screen/GameBoardCanvas';
+import GameBoardView from './game-screen/GameBoardView';
 import GameChatBox from './game-screen/GameChatBox';
 import GameScreenHud, { HudPlayerInfo } from './game-screen/GameScreenHud';
 import ShutdownTimer from './game-screen/ShutdownTimer';
 import TurnTimerHud from './game-screen/TurnTimerHud';
-import useGameBoard from './game-screen/useGameBoard';
 
 type GameScreenProps = {
     sessionId: string
@@ -31,6 +30,7 @@ type GameScreenProps = {
     interactionEnabled?: boolean
     showTilePieceMarkers?: boolean
     hideEloInHud?: boolean
+    tournament: SessionTournamentInfo | null
 
     chat: SessionChat
     isChatOpen: boolean
@@ -58,6 +58,7 @@ function GameScreen({
     interactionEnabled = true,
     showTilePieceMarkers = false,
     hideEloInHud = false,
+    tournament,
 
     chat,
     isChatOpen,
@@ -89,21 +90,6 @@ function GameScreen({
         currentPlayerId, participantRole, gameId,
     ]);
 
-    const {
-        canvasRef,
-        canvasClassName,
-        canvasHandlers,
-        renderableCellCount,
-        resetView,
-    } = useGameBoard({
-        gameState: gameState,
-        highlightedCells: gameState.winner?.cells ?? `turn`,
-        localPlayerId: isSpectator ? null : currentPlayerId,
-        interactionEnabled,
-        showTilePieceMarkers,
-        onPlaceCell: canPlaceCell ? onPlaceCell : undefined,
-    });
-
     useEffect(() => {
         const previousCellCount = previousCellCountRef.current;
         if (interactionEnabled && gameState.cells.length > previousCellCount) {
@@ -115,77 +101,84 @@ function GameScreen({
 
     const rankingAdjustment = players.find(player => player.id === currentPlayerId)?.ratingAdjustment ?? null;
     return (
-        <div className="relative w-full h-full overflow-hidden bg-slate-950 text-white">
-            <GameBoardCanvas
-                canvasRef={canvasRef}
-                className={canvasClassName}
-                handlers={canvasHandlers}
-            />
+        <GameBoardView
+            className="relative w-full h-full overflow-hidden bg-slate-950 text-white"
+            gameState={gameState}
+            highlightedCells={gameState.winner?.cells ?? `turn`}
+            localPlayerId={isSpectator ? null : currentPlayerId}
+            interactionEnabled={interactionEnabled}
+            showTilePieceMarkers={showTilePieceMarkers}
+            onPlaceCell={canPlaceCell ? onPlaceCell : undefined}
+        >
+            {({ renderableCellCount, resetView }) => (
+                <>
+                    <div className="pointer-events-none absolute inset-0">
+                        <div className="flex h-full flex-col justify-between gap-4">
+                            {interactionEnabled && (
+                                <TurnTimerHud
+                                    gameOptions={gameOptions}
+                                    players={players}
+                                    gameState={gameState}
+                                    localPlayerId={isSpectator ? null : currentPlayerId}
+                                />
+                            )}
+                        </div>
+                    </div>
 
-            <div className="pointer-events-none absolute inset-0">
-                <div className="flex h-full flex-col justify-between gap-4">
-                    {interactionEnabled && (
-                        <TurnTimerHud
-                            gameOptions={gameOptions}
-                            players={players}
-                            gameState={gameState}
-                            localPlayerId={isSpectator ? null : currentPlayerId}
-                        />
+                    {overlay && (
+                        <div className="absolute inset-0">
+                            {overlay}
+                        </div>
                     )}
-                </div>
-            </div>
 
-            {overlay && (
-                <div className="absolute inset-0">
-                    {overlay}
-                </div>
+                    {shutdown && (
+                        <div className="absolute bottom-3 left-3 rounded-full border border-amber-300/40 bg-amber-200/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100 shadow-lg">
+                            {`Server Restart in `}
+                            <ShutdownTimer shutdown={shutdown} />
+                        </div>
+                    )}
+
+                    <div className="absolute inset-0 flex flex-col justify-end pointer-events-none">
+                        <GameChatBox
+                            currentParticipantId={currentPlayerId}
+                            chat={chat}
+                            isOpen={isChatOpen}
+                            onOpenChange={onChatOpenChange}
+                            onSendMessage={onSendChatMessage}
+                        />
+
+                        {interactionEnabled && (
+                            <GameScreenHud
+                                sessionId={sessionId}
+                                gameOptions={gameOptions}
+                                hideEloInHud={hideEloInHud}
+                                tournament={tournament}
+
+                                players={hudPlayerInfo}
+                                localPlayerId={currentPlayerId}
+                                rankingAdjustment={rankingAdjustment}
+
+                                occupiedCellCount={gameState.cells.length}
+                                renderableCellCount={renderableCellCount}
+                                turnCount={gameState.turnCount}
+                                drawRequestByPlayerId={gameState.drawRequestByPlayerId}
+                                drawRequestAvailableAfterTurn={gameState.drawRequestAvailableAfterTurn}
+
+                                shutdown={shutdown}
+                                showConnectionUnstableBadge={showConnectionUnstableBadge}
+
+                                onRequestDraw={onRequestDraw}
+                                onAcceptDraw={onAcceptDraw}
+                                onDeclineDraw={onDeclineDraw}
+                                leaveLabel={leaveLabel}
+                                onLeave={onLeave}
+                                onResetView={resetView}
+                            />
+                        )}
+                    </div>
+                </>
             )}
-
-            {shutdown && (
-                <div className="absolute bottom-3 left-3 rounded-full border border-amber-300/40 bg-amber-200/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100 shadow-lg">
-                    {`Server Restart in `}
-                    <ShutdownTimer shutdown={shutdown} />
-                </div>
-            )}
-
-            <div className="absolute inset-0 flex flex-col justify-end pointer-events-none">
-                <GameChatBox
-                    currentParticipantId={currentPlayerId}
-                    chat={chat}
-                    isOpen={isChatOpen}
-                    onOpenChange={onChatOpenChange}
-                    onSendMessage={onSendChatMessage}
-                />
-
-                {interactionEnabled && (
-                    <GameScreenHud
-                        sessionId={sessionId}
-                        gameOptions={gameOptions}
-                        hideEloInHud={hideEloInHud}
-
-                        players={hudPlayerInfo}
-                        localPlayerId={currentPlayerId}
-                        rankingAdjustment={rankingAdjustment}
-
-                        occupiedCellCount={gameState.cells.length}
-                        renderableCellCount={renderableCellCount}
-                        turnCount={gameState.turnCount}
-                        drawRequestByPlayerId={gameState.drawRequestByPlayerId}
-                        drawRequestAvailableAfterTurn={gameState.drawRequestAvailableAfterTurn}
-
-                        shutdown={shutdown}
-                        showConnectionUnstableBadge={showConnectionUnstableBadge}
-
-                        onRequestDraw={onRequestDraw}
-                        onAcceptDraw={onAcceptDraw}
-                        onDeclineDraw={onDeclineDraw}
-                        leaveLabel={leaveLabel}
-                        onLeave={onLeave}
-                        onResetView={resetView}
-                    />
-                )}
-            </div>
-        </div >
+        </GameBoardView>
     );
 }
 

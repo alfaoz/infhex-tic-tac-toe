@@ -2,7 +2,9 @@ import {
     GameCellPlaceEvent,
     type GameState,
     GameStateEvent,
+    type MatchClaimWinState,
     SessionChatEvent,
+    type SessionClaimWinEvent,
     type SessionInfo,
     SessionJoinedEvent,
     SessionParticipantRole,
@@ -31,6 +33,7 @@ type LiveGameStoreState = {
     }
 
     session: ActiveSession | null
+    claimWinState: MatchClaimWinState | null
     pendingSessionJoin: PendingSessionJoinState
 
     onSocketConnected: () => void
@@ -49,6 +52,7 @@ type LiveGameStoreState = {
 
     handleGameState: (payload: GameStateEvent) => void
     handleGameCellPlace: (payload: GameCellPlaceEvent) => void
+    handleClaimWinEvent: (payload: SessionClaimWinEvent) => void
 };
 
 export const useLiveGameStore = create<LiveGameStoreState>()(
@@ -61,6 +65,7 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
         },
         pendingSessionJoin: { status: `idle`, sessionId: null, errorMessage: null },
         session: null,
+        claimWinState: null,
         game: null,
 
         onSocketConnected: () => set(state => {
@@ -103,6 +108,7 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
         }),
         setupSession: (payload) => set(state => {
             state.pendingSessionJoin = { status: `idle`, sessionId: null, errorMessage: null };
+            state.claimWinState = null;
             state.session = {
                 ...payload.session,
                 gameState: payload.gameState,
@@ -146,9 +152,17 @@ export const useLiveGameStore = create<LiveGameStoreState>()(
                 event.cell,
             ];
         }),
+        handleClaimWinEvent: (event) => set(state => {
+            if (state.session?.id !== event.sessionId) {
+                return;
+            }
+
+            state.claimWinState = event.state;
+        }),
         clearSession: () => set(state => {
             state.pendingSessionJoin = { status: `idle`, sessionId: null, errorMessage: null };
             state.session = null;
+            state.claimWinState = null;
         }),
     })),
 );
