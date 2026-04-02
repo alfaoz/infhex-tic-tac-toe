@@ -57,6 +57,7 @@ type UseGameBoardOptions = {
     highlightedCells: `last` | `turn` | HexCell[]
     localPlayerId: string | null
     interactionEnabled: boolean
+    viewInteractionEnabled?: boolean
     onPlaceCell?: (x: number, y: number) => void
     showTilePieceMarkers?: boolean
 };
@@ -250,6 +251,7 @@ function useGameBoard({
     gameState: gameState,
     localPlayerId,
     interactionEnabled,
+    viewInteractionEnabled = interactionEnabled,
     onPlaceCell,
     highlightedCells,
     showTilePieceMarkers = false,
@@ -257,6 +259,7 @@ function useGameBoard({
     const isSpectator = localPlayerId === null;
     const isOwnTurn = localPlayerId !== null && gameState.currentTurnPlayerId === localPlayerId;
     const canPlaceCell = interactionEnabled && Boolean(onPlaceCell) && isOwnTurn;
+    const canManipulateView = viewInteractionEnabled;
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const dragStateRef = useRef<DragState | null>(null);
@@ -680,7 +683,7 @@ function useGameBoard({
     useEffect(() => {
         scheduleDraw();
     }, [
-        gameState, renderableCells, highlightedCellKeys, interactionEnabled, canPlaceCell, isOwnTurn,
+        gameState, renderableCells, highlightedCellKeys, interactionEnabled, canManipulateView, canPlaceCell, isOwnTurn,
     ]);
 
     useEffect(() => {
@@ -706,8 +709,10 @@ function useGameBoard({
 
     return {
         canvasRef,
-        canvasClassName: `absolute inset-0 h-full w-full touch-none select-none ${interactionEnabled
-            ? (canPlaceCell || isSpectator ? `cursor-grab active:cursor-grabbing` : `cursor-not-allowed`)
+        canvasClassName: `absolute inset-0 h-full w-full touch-none select-none ${canManipulateView
+            ? `cursor-grab active:cursor-grabbing`
+            : interactionEnabled && !canPlaceCell && !isSpectator
+                ? `cursor-not-allowed`
             : `cursor-default`
         }`,
         canvasHandlers: {
@@ -715,7 +720,7 @@ function useGameBoard({
                 event.preventDefault();
             },
             onMouseDown: (event) => {
-                if (!interactionEnabled || shouldIgnoreMouseEvent()) {
+                if (!canManipulateView || shouldIgnoreMouseEvent()) {
                     return;
                 }
 
@@ -743,7 +748,7 @@ function useGameBoard({
                 };
             },
             onMouseMove: (event) => {
-                if (!interactionEnabled || shouldIgnoreMouseEvent()) {
+                if (!canManipulateView || shouldIgnoreMouseEvent()) {
                     return;
                 }
 
@@ -782,7 +787,7 @@ function useGameBoard({
                 scheduleDraw();
             },
             onMouseLeave: () => {
-                if (!interactionEnabled || shouldIgnoreMouseEvent()) {
+                if (!canManipulateView || shouldIgnoreMouseEvent()) {
                     return;
                 }
 
@@ -797,7 +802,7 @@ function useGameBoard({
                 }
             },
             onMouseUp: (event) => {
-                if (!interactionEnabled || shouldIgnoreMouseEvent()) {
+                if (!canManipulateView || shouldIgnoreMouseEvent()) {
                     return;
                 }
 
@@ -824,16 +829,17 @@ function useGameBoard({
                 tryPlaceCellAtClientPoint(event.clientX, event.clientY);
             },
             onWheel: (event) => {
-                if (!interactionEnabled) {
+                if (!canManipulateView) {
                     return;
                 }
 
+                event.preventDefault();
                 const zoomFactor = event.deltaY > 0 ? 0.92 : 1.08;
                 applyZoomAtClientPoint(event.clientX, event.clientY, viewRef.current.scale * zoomFactor);
                 scheduleDraw();
             },
             onTouchStart: (event) => {
-                if (!interactionEnabled) {
+                if (!canManipulateView) {
                     return;
                 }
 
@@ -876,7 +882,7 @@ function useGameBoard({
                 scheduleDraw();
             },
             onTouchMove: (event) => {
-                if (!interactionEnabled) {
+                if (!canManipulateView) {
                     return;
                 }
 
@@ -933,7 +939,7 @@ function useGameBoard({
                 scheduleDraw();
             },
             onTouchEnd: (event) => {
-                if (!interactionEnabled) {
+                if (!canManipulateView) {
                     return;
                 }
 
