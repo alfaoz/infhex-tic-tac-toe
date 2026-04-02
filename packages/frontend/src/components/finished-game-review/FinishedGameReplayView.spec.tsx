@@ -95,3 +95,40 @@ test('steps through replay moves with the left and right arrow keys', async ({ m
   await expect(component.getByText(/^Move 1\/2$/)).toBeVisible()
   await expect(component.getByText('Alpha at (0, 0)')).toBeVisible()
 })
+
+test('renders replay when the second listed player made the opening move', async ({ mount }) => {
+  const guestOpeningGame: FinishedGameRecord = {
+    ...finishedGame,
+    gameOptions: {
+      ...finishedGame.gameOptions,
+      firstPlayer: 'guest',
+    },
+    moves: [
+      {
+        moveNumber: 1,
+        playerId: 'player-2',
+        x: 0,
+        y: 0,
+        timestamp: 1_700_000_010_000,
+      },
+      {
+        moveNumber: 2,
+        playerId: 'player-1',
+        x: 1,
+        y: 0,
+        timestamp: 1_700_000_020_000,
+      },
+    ],
+  }
+
+  const component = await mount(
+    <FinishedGameReplayView
+      game={guestOpeningGame}
+      showTilePieceMarkers={false}
+      onRetry={() => { /* empty */ }}
+    />
+  )
+
+  await expect(component.getByText(/^Move 2\/2$/)).toBeVisible()
+  await expect(component.getByText('Alpha at (1, 0)')).toBeVisible()
+})
