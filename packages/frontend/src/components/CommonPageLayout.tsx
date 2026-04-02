@@ -6,6 +6,7 @@ import { useQueryAccount } from '../query/accountClient';
 import { signInWithDiscord, signOutAccount } from '../query/authClient';
 import AccountPicture from './AccountPicture';
 import AppErrorBoundary from './AppErrorBoundary';
+import DevAuthPanel from './DevAuthPanel';
 
 function showErrorToast(message: string) {
     toast.error(message, {
@@ -215,6 +216,7 @@ function CommonPageLayout({ limitWidth }: { limitWidth: boolean }) {
                             <DiscordLink />
                         </nav>
 
+                        <DevAuthPanel account={account} />
 
                         {accountQuery.isLoading ? (
                             <div className="self-start rounded-lg px-3 py-2 text-sm text-slate-400 lg:self-auto">

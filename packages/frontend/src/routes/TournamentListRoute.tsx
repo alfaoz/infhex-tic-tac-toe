@@ -7,8 +7,10 @@ import PageCorpus from '../components/PageCorpus';
 import PageMetadata, { DEFAULT_PAGE_TITLE } from '../components/PageMetadata';
 import TournamentEditorCard, { createDefaultTournamentRequest } from '../components/TournamentEditorCard';
 import { useQueryAccount } from '../query/accountClient';
+import { createQuickSealBotTournament, seedTournamentWithDevUsers } from '../query/devAuthClient';
 import {
     createCommunityTournament,
+    startTournament,
     unsubscribeFromTournament,
     useQueryTournaments,
 } from '../query/tournamentClient';
@@ -276,6 +278,8 @@ function TournamentListRoute() {
     const tQ = useQueryTournaments({ enabled: true, pastPage });
     const [submitting, setSubmitting] = useState(false);
     const [showCreateForm, setShowCreateForm] = useState(false);
+    const [quickCreating, setQuickCreating] = useState(false);
+    const [quickSealBotCreating, setQuickSealBotCreating] = useState(false);
 
     const acct = acctQ.data?.user ?? null;
     const data = tQ.data;
@@ -302,6 +306,50 @@ function TournamentListRoute() {
             toast.success(`Unsubscribed.`, { toastId: `unsub` });
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : `Failed to unsubscribe.`, { toastId: `unsub-err` });
+        }
+    };
+
+    const handleQuickCreate = async () => {
+        if (!import.meta.env.DEV) return;
+        try {
+            setQuickCreating(true);
+            const request: CreateTournamentRequest = {
+                name: `Quick Test ${new Date().toLocaleTimeString()}`,
+                format: `double-elimination`,
+                visibility: `private`,
+                scheduledStartAt: Date.now() + 60_000,
+                checkInWindowMinutes: 5,
+                maxPlayers: 256,
+                timeControl: { mode: `turn`, turnTimeMs: 45_000 },
+                seriesSettings: { earlyRoundsBestOf: 1, finalsBestOf: 3, grandFinalBestOf: 5, grandFinalResetEnabled: true },
+                matchJoinTimeoutMinutes: 5,
+            };
+            const t = await createCommunityTournament(request);
+            toast.info(`Created. Seeding 256 players...`, { toastId: `quick-create` });
+            await seedTournamentWithDevUsers(t.id, { count: 256, state: `checked-in` });
+            toast.info(`Seeded. Starting...`, { toastId: `quick-create` });
+            await startTournament(t.id);
+            toast.success(`Tournament started!`, { toastId: `quick-create` });
+            void nav(`/tournaments/${t.id}`);
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : `Quick create failed.`, { toastId: `quick-create-err` });
+        } finally {
+            setQuickCreating(false);
+        }
+    };
+
+    const handleQuickSealBotCreate = async () => {
+        if (!import.meta.env.DEV) return;
+
+        try {
+            setQuickSealBotCreating(true);
+            const tournament = await createQuickSealBotTournament();
+            toast.success(`8-player Seal Bot tournament created.`, { toastId: `quick-seal-bot` });
+            void nav(`/tournaments/${tournament.id}`);
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : `Quick Seal Bot tournament failed.`, { toastId: `quick-seal-bot-err` });
+        } finally {
+            setQuickSealBotCreating(false);
         }
     };
 
@@ -379,6 +427,26 @@ function TournamentListRoute() {
                             upcomingMatches={upcomingMatches}
                             onNavigate={(id) => void nav(`/tournaments/${id}`)}
                         />
+
+                        {import.meta.env.DEV && acct && (
+                            <div className="grid gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => void handleQuickSealBotCreate()}
+                                    disabled={quickSealBotCreating}
+                                    className="w-full rounded-lg border border-dashed border-sky-300/30 bg-sky-300/6 px-3 py-2 text-[11px] font-semibold text-sky-200 transition hover:bg-sky-300/12 disabled:opacity-40"
+                                >
+                                    {quickSealBotCreating ? `Creating...` : `Quick Create 8-Player Seal Bot Tournament`}
+                                </button>
+
+                                <button
+                                    type="button" onClick={() => void handleQuickCreate()} disabled={quickCreating}
+                                    className="w-full rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-40"
+                                >
+                                    {quickCreating ? `Creating...` : `Quick Create 256-Player Tournament`}
+                                </button>
+                            </div>
+                        )}
 
                         {acct ? (
                             <>
