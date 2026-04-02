@@ -49,6 +49,7 @@ const finishedGame: FinishedGameRecord = {
     durationMs: 120_000,
     reason: 'six-in-a-row',
   },
+  tournament: null,
   moves: [
     {
       moveNumber: 1,

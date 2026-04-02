@@ -44,6 +44,7 @@ function createProps(overrides: Partial<GameScreenHudProps> = {}): GameScreenHud
     drawRequestAvailableAfterTurn: 50,
     gameOptions: baseGameOptions,
     shutdown: null,
+    tournament: null,
     onLeave: () => { },
     onResetView: () => { },
     ...overrides,
