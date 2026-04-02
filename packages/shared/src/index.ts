@@ -1,8 +1,17 @@
 import { z } from 'zod';
+import {
+    zFinishedGameTournamentInfo,
+    zSessionTournamentInfo,
+    type ClaimWinRequest,
+    type SessionClaimWinEvent,
+    type TournamentNotificationEvent,
+    type TournamentUpdatedEvent,
+} from './tournaments';
 
 export * from "./botInterface";
 export * from "./botWorkerProtocol";
 export * from "./ssr";
+export * from './tournaments';
 
 export const PLACE_CELL_HEX_RADIUS = 8;
 const WINNING_LINE_LENGTH = 6;
@@ -28,6 +37,9 @@ export const zHexCoordinate = z.object({
 
 export const zUserRole = z.enum([`user`, `admin`]);
 export type UserRole = z.infer<typeof zUserRole>;
+
+export const zAccountPermission = z.enum([`official-tournament-organizer`]);
+export type AccountPermission = z.infer<typeof zAccountPermission>;
 
 export const zSessionParticipantRole = z.enum([`player`, `spectator`]);
 export type SessionParticipantRole = z.infer<typeof zSessionParticipantRole>;
@@ -575,6 +587,12 @@ export const zJoinSessionRequest = z.object({
 });
 export type JoinSessionRequest = z.infer<typeof zJoinSessionRequest>;
 
+export const zWatchSessionRequest = z.object({
+    sessionId: z.string().trim()
+        .min(1),
+});
+export type WatchSessionRequest = z.infer<typeof zWatchSessionRequest>;
+
 const zSessionChat = z.object({
     messages: z.array(zSessionChatMessage).default([]),
     displayNames: z.record(z.string(), z.string()),
@@ -612,6 +630,8 @@ export const zSessionInfo = z.object({
 
     chat: zSessionChat,
     state: zSessionState,
+    tournament: zSessionTournamentInfo.nullable()
+        .default(null),
 });
 export type SessionInfo = z.infer<typeof zSessionInfo>;
 
@@ -666,6 +686,8 @@ export const zDatabaseGame = z.object({
     moveCount: z.number().int()
         .nonnegative(),
     gameResult: zDatabaseGameResult.nullable(),
+    tournament: zFinishedGameTournamentInfo.nullable()
+        .default(null),
 });
 export type DatabaseGame = z.infer<typeof zDatabaseGame>;
 
@@ -680,6 +702,8 @@ export const zFinishedGameSummary = z.object({
     moveCount: z.number().int()
         .nonnegative(),
     gameResult: zDatabaseGameResult.nullable(),
+    tournament: zFinishedGameTournamentInfo.nullable()
+        .default(null),
 });
 export type FinishedGameSummary = z.infer<typeof zFinishedGameSummary>;
 
@@ -723,6 +747,18 @@ export const zSessionUpdatedEvent = z.object({
     session: zSessionInfo.partial(),
 });
 export type SessionUpdatedEvent = z.infer<typeof zSessionUpdatedEvent>;
+
+export const zSessionWatchStartedEvent = z.object({
+    session: zSessionInfo,
+    gameState: zGameState,
+});
+export type SessionWatchStartedEvent = z.infer<typeof zSessionWatchStartedEvent>;
+
+export const zSessionWatchErrorEvent = z.object({
+    sessionId: zIdentifier,
+    message: z.string(),
+});
+export type SessionWatchErrorEvent = z.infer<typeof zSessionWatchErrorEvent>;
 
 export const zSessionChatEvent = z.object({
     sessionId: z.string(),
@@ -769,10 +805,15 @@ export const zServerToClientEvents = z.custom<{
 
     'session-joined': (data: SessionJoinedEvent) => void;
     'session-updated': (data: SessionUpdatedEvent) => void;
+    'session-watch-started': (data: SessionWatchStartedEvent) => void;
+    'session-watch-error': (data: SessionWatchErrorEvent) => void;
     'session-chat': (data: SessionChatEvent) => void;
 
     'game-state': (data: GameStateEvent) => void;
     'game-cell-place': (data: GameCellPlaceEvent) => void;
+    'tournament-updated': (data: TournamentUpdatedEvent) => void;
+    'tournament-notification': (data: TournamentNotificationEvent) => void;
+    'session-claim-win': (data: SessionClaimWinEvent) => void;
 
     error: (error: string) => void;
 }>();
@@ -781,6 +822,8 @@ export type ServerToClientEvents = z.infer<typeof zServerToClientEvents>;
 export const zClientToServerEvents = z.custom<{
     'client-ping': () => void;
     'join-session': (request: JoinSessionRequest) => void;
+    'watch-session': (request: WatchSessionRequest) => void;
+    'unwatch-session': (request: WatchSessionRequest) => void;
     'leave-session': (sessionId: string) => void;
     'surrender-session': (sessionId: string) => void;
     'request-session-draw': (sessionId: string) => void;
@@ -790,6 +833,7 @@ export const zClientToServerEvents = z.custom<{
     'send-session-chat-message': (data: SessionChatMessageRequest) => void;
     'request-rematch': (sessionId: string) => void;
     'cancel-rematch': (sessionId: string) => void;
+    'claim-win': (data: ClaimWinRequest) => void;
 }>();
 export type ClientToServerEvents = z.infer<typeof zClientToServerEvents>;
 
@@ -889,6 +933,8 @@ export const zAccountProfile = z.object({
     email: z.string().nullable(),
     image: z.string().nullable(),
     role: zUserRole,
+    permissions: z.array(zAccountPermission)
+        .default([]),
     registeredAt: zTimestamp,
     lastActiveAt: zTimestamp,
 });
@@ -904,16 +950,36 @@ export const zAccountResponse = z.object({
 });
 export type AccountResponse = z.infer<typeof zAccountResponse>;
 
+export const zAdminUserSearchResponse = z.object({
+    users: z.array(zAccountProfile),
+});
+export type AdminUserSearchResponse = z.infer<typeof zAdminUserSearchResponse>;
+
+export const zAdminUpdateUserPermissionsRequest = z.object({
+    permissions: z.array(zAccountPermission)
+        .default([]),
+});
+export type AdminUpdateUserPermissionsRequest = z.infer<typeof zAdminUpdateUserPermissionsRequest>;
+
+export const zAdminUpdateUserPermissionsResponse = z.object({
+    user: zAccountProfile.nullable(),
+});
+export type AdminUpdateUserPermissionsResponse = z.infer<typeof zAdminUpdateUserPermissionsResponse>;
+
 export const zProfileResponse = z.object({
     user: zPublicAccountProfile.nullable(),
 });
+export type ProfileResponse = z.infer<typeof zProfileResponse>;
 
 export const zAccountPreferencesResponse = z.object({
     preferences: zAccountPreferences,
 });
 export type AccountPreferencesResponse = z.infer<typeof zAccountPreferencesResponse>;
 
-export type ProfileResponse = z.infer<typeof zProfileResponse>;
+export const zUserSearchResponse = z.object({
+    users: z.array(zPublicAccountProfile),
+});
+export type UserSearchResponse = z.infer<typeof zUserSearchResponse>;
 
 export const zProfileStatisticsResponse = z.object({
     statistics: zAccountStatistics,
