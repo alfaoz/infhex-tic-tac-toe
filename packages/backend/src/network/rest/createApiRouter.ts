@@ -42,10 +42,11 @@ import { ServerSettingsService } from '../../admin/serverSettingsService';
 import { ServerShutdownService } from '../../admin/serverShutdownService';
 import { type AccountUserProfile, AuthRepository } from '../../auth/authRepository';
 import { AuthService } from '../../auth/authService';
+import { DevSupportService } from '../../dev/devSupportService';
 import { SandboxPositionService } from '../../sandbox/sandboxPositionService';
 import { SessionError, SessionManager } from '../../session/sessionManager';
 import { TournamentService } from '../../tournament/tournamentService';
-import { getRequestClientInfo } from '../clientInfo';
+import { getCookieValue, getRequestClientInfo } from '../clientInfo';
 import { SocketServerGateway } from '../createSocketServer';
 import { ApiQueryService, ApiRequestError } from './apiQueryService';
 
@@ -71,6 +72,20 @@ const zAdminUserSearchQuery = z.object({
     q: z.preprocess((value): unknown => Array.isArray(value) ? value[0] : value, z.string().trim()
         .min(1)
         .max(80)),
+});
+const zDevAuthLoginRequest = z.object({
+    userId: z.string().trim()
+        .min(1),
+});
+const zDevTournamentSeedRequest = z.object({
+    count: z.coerce.number().int()
+        .min(1)
+        .max(256)
+        .default(8),
+    state: z.enum([
+        `registered`,
+        `checked-in`,
+    ]).default(`checked-in`),
 });
 const zGameTimeControlInput = z.union([
     z.object({
@@ -108,6 +123,7 @@ export class ApiRouter {
         @inject(ApiQueryService) private readonly apiQueryService: ApiQueryService,
         @inject(AuthService) private readonly authService: AuthService,
         @inject(AuthRepository) private readonly authRepository: AuthRepository,
+        @inject(DevSupportService) private readonly devSupportService: DevSupportService,
         @inject(ServerSettingsService) private readonly serverSettingsService: ServerSettingsService,
         @inject(ServerShutdownService) private readonly serverShutdownService: ServerShutdownService,
         @inject(AdminStatsService) private readonly adminStatsService: AdminStatsService,
@@ -289,6 +305,126 @@ export class ApiRouter {
                 throw error;
             }
         });
+
+        if (this.devSupportService.isEnabled()) {
+            router.get(`/dev-auth/users`, async (_req, res) => {
+                res.json({
+                    users: await this.devSupportService.listDevUsers(),
+                });
+            });
+
+            router.post(`/dev-auth/login`, express.json(), async (req, res) => {
+                const previousSessionToken = getCookieValue(req.get(`cookie`), this.authService.sessionCookieName);
+                if (previousSessionToken) {
+                    await this.authRepository.deleteSession(previousSessionToken);
+                }
+
+                const request = zDevAuthLoginRequest.parse(req.body ?? {});
+                const { user, sessionToken, expires } = await this.devSupportService.loginDevUser(request.userId);
+                res.cookie(this.authService.sessionCookieName, sessionToken, {
+                    httpOnly: true,
+                    sameSite: `lax`,
+                    path: `/`,
+                    secure: false,
+                    expires,
+                });
+                res.json({ user });
+            });
+
+            router.post(`/dev-auth/logout`, async (req, res) => {
+                const sessionToken = getCookieValue(req.get(`cookie`), this.authService.sessionCookieName);
+                if (sessionToken) {
+                    await this.authRepository.deleteSession(sessionToken);
+                }
+
+                res.clearCookie(this.authService.sessionCookieName, {
+                    path: `/`,
+                    sameSite: `lax`,
+                    secure: false,
+                });
+                res.json({ ok: true });
+            });
+
+            // Dev: resolve current round
+            router.post(`/dev/tournaments/:tournamentId/resolve-round`, async (req, res) => {
+                const user = await this.authService.getUserFromRequest(req);
+                if (!user) { res.status(401).json({ error: `Sign in.` }); return; }
+                try {
+                    res.json(await this.devSupportService.resolveCurrentRound(req.params.tournamentId, user));
+                } catch (error: unknown) {
+                    if (error instanceof SessionError) { res.status(409).json({ error: error.message }); return; }
+                    throw error;
+                }
+            });
+
+            // Dev: resolve all remaining matches
+            router.post(`/dev/tournaments/:tournamentId/resolve-all`, async (req, res) => {
+                const user = await this.authService.getUserFromRequest(req);
+                if (!user) { res.status(401).json({ error: `Sign in.` }); return; }
+                try {
+                    res.json(await this.devSupportService.resolveAll(req.params.tournamentId, user));
+                } catch (error: unknown) {
+                    if (error instanceof SessionError) { res.status(409).json({ error: error.message }); return; }
+                    throw error;
+                }
+            });
+
+            // Dev: resolve N matches from current round
+            router.post(`/dev/tournaments/:tournamentId/resolve-n`, express.json(), async (req, res) => {
+                const user = await this.authService.getUserFromRequest(req);
+                if (!user) { res.status(401).json({ error: `Sign in.` }); return; }
+                try {
+                    const count = z.coerce.number().int().min(1).max(500).parse((req.body as { count?: unknown })?.count ?? 1);
+                    res.json(await this.devSupportService.resolveN(req.params.tournamentId, user, count));
+                } catch (error: unknown) {
+                    if (error instanceof SessionError) { res.status(409).json({ error: error.message }); return; }
+                    throw error;
+                }
+            });
+
+            router.post(`/dev/tournaments/:tournamentId/seed`, express.json(), async (req, res) => {
+                const user = await this.authService.getUserFromRequest(req);
+                if (!user) {
+                    res.status(401).json({ error: `Sign in before using development tournament helpers.` });
+                    return;
+                }
+
+                try {
+                    const request = zDevTournamentSeedRequest.parse(req.body ?? {});
+                    const response = await this.devSupportService.seedTournament(req.params.tournamentId, user, request);
+                    res.json({
+                        addedCount: response.addedCount,
+                    });
+                } catch (error: unknown) {
+                    if (error instanceof SessionError) {
+                        res.status(409).json({ error: error.message });
+                        return;
+                    }
+
+                    throw error;
+                }
+            });
+
+            router.post(`/dev/tournaments/quick-seal-bot`, async (req, res) => {
+                const user = await this.authService.getUserFromRequest(req);
+                if (!user) {
+                    res.status(401).json({ error: `Sign in before using development tournament helpers.` });
+                    return;
+                }
+
+                try {
+                    const tournament = await this.devSupportService.createQuickSealBotTournament(user);
+                    res.json({ tournament });
+                } catch (error: unknown) {
+                    if (error instanceof SessionError) {
+                        res.status(409).json({ error: error.message });
+                        return;
+                    }
+
+                    throw error;
+                }
+            });
+        }
 
         router.post(`/tournaments/community`, express.json(), async (req, res) => {
             const user = await this.authService.getUserFromRequest(req);
