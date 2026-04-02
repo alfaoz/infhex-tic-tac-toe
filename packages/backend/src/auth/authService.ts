@@ -9,6 +9,8 @@ import { ServerConfig } from '../config/serverConfig';
 import { getCookieValue } from '../network/clientInfo';
 import { CorsConfiguration } from '../network/cors';
 import { type AccountUserProfile, AuthRepository } from './authRepository';
+import { ROOT_LOGGER } from '@/logger';
+import type { Logger } from 'pino';
 
 /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 const Discord: typeof _Discord = (_Discord as any).default ?? _Discord;
@@ -27,10 +29,12 @@ export class AuthService {
     readonly sessionCookieName = `ih3t.session-token`;
 
     constructor(
+        @inject(ROOT_LOGGER) rootLogger: Logger,
         @inject(ServerConfig) serverConfig: ServerConfig,
         @inject(CorsConfiguration) corsConfiguration: CorsConfiguration,
         @inject(AuthRepository) private readonly authRepository: AuthRepository,
     ) {
+        const logger = rootLogger.child({ component: `auth-service` });
         const useSecureCookies = process.env.NODE_ENV === `production`;
 
         this.config = {
@@ -67,12 +71,25 @@ export class AuthService {
                 }),
             ],
             callbacks: {
-                async signIn({ profile }) {
-                    if (typeof profile?.email === `string` && profile.email.trim().length > 0) {
-                        return true;
+                async signIn({ profile, account, user }) {
+                    if (!profile?.email || profile.email.trim().length === 0) {
+                        throw new Error(`Discord did not provide a verified email address for this account.`);
                     }
 
-                    throw new Error(`Discord did not provide a verified email address for this account.`);
+                    if (account?.provider === `discord` && profile?.avatar) {
+                        const avatarUrl = getDiscordAvatarUrl(profile as DiscordProfile);
+                        if (user.image !== avatarUrl) {
+                            user.image = avatarUrl;
+
+                            logger.info(`Updated user ${user.id} Discord avatar.`);
+                            void authRepository.updateUser({
+                                id: user.id!,
+                                image: user.image
+                            });
+                        }
+                    }
+
+                    return true;
                 },
                 async redirect({ url, baseUrl }) {
                     if (url.startsWith(`/`)) {
