@@ -158,6 +158,20 @@ function toLocal(ts: number) {
     return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
+function formatUtcHint(localDateTime: string): string | null {
+    const parsed = new Date(localDateTime);
+    if (!Number.isFinite(parsed.valueOf())) {
+        return null;
+    }
+
+    const year = parsed.getUTCFullYear();
+    const month = String(parsed.getUTCMonth() + 1).padStart(2, `0`);
+    const day = String(parsed.getUTCDate()).padStart(2, `0`);
+    const hours = String(parsed.getUTCHours()).padStart(2, `0`);
+    const minutes = String(parsed.getUTCMinutes()).padStart(2, `0`);
+    return `${year}-${month}-${day} ${hours}:${minutes} UTC`;
+}
+
 function init(r: CreateTournamentRequest): TournamentFormState {
     return {
         name: r.name,
@@ -249,6 +263,7 @@ function TournamentEditorCard({
 
     const set = <K extends keyof TournamentFormState>(k: K, v: TournamentFormState[K]) =>
         setF((c) => ({ ...c, [k]: v }));
+    const scheduledStartUtcHint = formatUtcHint(f.scheduledStartAt);
 
     const submit = () => {
         const sd = new Date(f.scheduledStartAt);
@@ -344,7 +359,20 @@ function TournamentEditorCard({
 
             {/* Schedule — two inline fields */}
             <div className="mb-3 grid grid-cols-2 gap-3">
-                <Row label="Start"><Input type="datetime-local" value={f.scheduledStartAt} onChange={(e) => set(`scheduledStartAt`, e.target.value)} className="w-full" /></Row>
+                <Row label="Start">
+                    <Input type="datetime-local" value={f.scheduledStartAt} onChange={(e) => set(`scheduledStartAt`, e.target.value)} className="w-full" />
+                    <div className="text-[10px] text-slate-500">
+                        Times are entered in your local timezone.
+                        {scheduledStartUtcHint && (
+                            <>
+                                {` `}
+                                <span className="text-slate-400">
+                                    {`UTC: ${scheduledStartUtcHint}`}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </Row>
                 <Row label="Check-in (min)"><Input type="number" min={5} max={1440} value={f.checkInWindowMinutes} onChange={(e) => set(`checkInWindowMinutes`, e.target.value)} className="w-full" /></Row>
             </div>
 
