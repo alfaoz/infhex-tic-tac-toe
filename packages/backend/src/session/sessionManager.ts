@@ -42,6 +42,7 @@ import type {
     ServerPlayerConnection,
     ServerSessionParticipation,
     ServerSessionPlayer,
+    SessionWatchSnapshot,
     SessionManagerEventHandlers,
 } from './types';
 import {
@@ -123,6 +124,18 @@ export class SessionManager {
     getSessionInfo(sessionId: string): SessionInfo | null {
         const session = this.sessions.get(sessionId);
         return session ? this.toSessionInfo(session) : null;
+    }
+
+    getSessionSnapshot(sessionId: string): SessionWatchSnapshot | null {
+        const session = this.sessions.get(sessionId);
+        if (!session) {
+            return null;
+        }
+
+        return {
+            session: this.toSessionInfo(session),
+            gameState: this.simulation.getPublicGameState(session.gameState),
+        };
     }
 
     async terminateActiveSession(sessionId: string): Promise<SessionInfo> {
