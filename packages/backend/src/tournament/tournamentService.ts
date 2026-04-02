@@ -1868,6 +1868,7 @@ export class TournamentService {
                     visibility: `private`,
                     timeControl: { ...tournament.timeControl },
                     rated: false,
+                    firstPlayer: `random`,
                 },
                 reservedPlayerProfileIds: this.getReservedSeatOrder(match),
                 tournament: this.toSessionTournamentInfo(tournament, match),
@@ -2941,7 +2942,7 @@ export class TournamentService {
                         const sessionInfo = this.sessionManager.getSessionInfo(match.sessionId);
                         if (sessionInfo) {
                             this.socketServerGateway.emitSessionUpdated({
-                                sessionId: match.sessionId,
+                                sessionId: match.sessionId as SessionInfo[`id`],
                                 session: { tournament: sessionInfo.tournament },
                             });
                         }

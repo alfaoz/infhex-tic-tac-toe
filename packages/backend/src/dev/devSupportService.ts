@@ -515,7 +515,10 @@ export class DevSupportService {
         }
 
         try {
-            await this.sessionManager.placeCell(session, playerId, nextMove.x, nextMove.y);
+            await this.sessionManager.placeCell(session, playerId, {
+                x: nextMove.x,
+                y: nextMove.y,
+            });
             const remainingMoves = queuedMoves.slice(1);
             if (remainingMoves.length > 0) {
                 sessionState.pendingMovesByPlayerId.set(playerId, remainingMoves);

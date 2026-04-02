@@ -175,9 +175,9 @@ function GameScreen({
                                 shutdown={shutdown}
                                 showConnectionUnstableBadge={showConnectionUnstableBadge}
 
-                                onRequestDraw={onRequestDraw}
-                                onAcceptDraw={onAcceptDraw}
-                                onDeclineDraw={onDeclineDraw}
+                                onRequestDraw={onDrawRequest}
+                                onAcceptDraw={onDrawAccept}
+                                onDeclineDraw={onDrawDecline}
                                 leaveLabel={leaveLabel}
                                 onLeave={onLeave}
                                 onResetView={resetView}

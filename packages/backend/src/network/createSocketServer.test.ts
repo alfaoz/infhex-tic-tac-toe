@@ -10,6 +10,7 @@ import {
     type LobbyInfo,
     type ServerToClientEvents,
     type SessionInfo,
+    type SessionId,
     type SessionUpdatedEvent,
     zCellOccupant,
 } from '@ih3t/shared';
@@ -18,14 +19,17 @@ import { io as createClient, type Socket as ClientSocket } from 'socket.io-clien
 
 import { SocketServerGateway } from './createSocketServer';
 
-type FakeParticipant = SessionInfo[`players`][number];
+type FakePlayer = SessionInfo[`players`][number];
+type FakeSpectator = SessionInfo[`spectators`][number] & {
+    socketId: string | null
+};
 
 type FakeSession = {
-    id: string
+    id: SessionId
     gameState: GameState
     gameOptions: SessionInfo[`gameOptions`]
-    players: FakeParticipant[]
-    spectators: FakeParticipant[]
+    players: FakePlayer[]
+    spectators: FakeSpectator[]
     chat: SessionInfo[`chat`]
     tournament: SessionInfo[`tournament`]
     state: SessionInfo[`state`]
@@ -33,9 +37,17 @@ type FakeSession = {
 
 type FakeParticipation = {
     session: FakeSession
-    participant: FakeParticipant
+    participant: FakePlayer | FakeSpectator
     role: `player` | `spectator`
 };
+
+function isFakePlayer(participant: FakePlayer | FakeSpectator): participant is FakePlayer {
+    return `connection` in participant;
+}
+
+function isFakeSpectator(participant: FakePlayer | FakeSpectator): participant is FakeSpectator {
+    return `socketId` in participant;
+}
 
 class FakeSessionManager {
     private eventHandlers: {
@@ -54,12 +66,17 @@ class FakeSessionManager {
         return [];
     }
 
-    async participantTransferConnection(): Promise<null> {
-        return null;
+    getParticipationsBySocketId(socketId: string) {
+        const participation = this.socketParticipations.get(socketId);
+        return participation ? [participation] : [];
     }
 
-    async participantReclaimSessionFromDeviceId(): Promise<null> {
-        return null;
+    async connectionTransfer(): Promise<[]> {
+        return [];
+    }
+
+    async connectionReclaimFromDeviceId(): Promise<[]> {
+        return [];
     }
 
     getSessionSnapshot(sessionId: string) {
@@ -97,7 +114,7 @@ class FakeSessionManager {
     }
 
     async joinSession(session: FakeSession, _params: unknown) {
-        const participant: FakeParticipant = {
+        const participant: FakePlayer = {
             id: `${session.id}-player-${session.players.length + 1}`,
             displayName: `Guest`,
             profileId: null,
@@ -118,8 +135,14 @@ class FakeSessionManager {
             ?? session.spectators.find((entry) => entry.id === participantId);
         assert.ok(participant, `Expected participant ${participantId} in session ${session.id}.`);
 
-        participant.connection = { status: `connected` };
         const role = session.players.some((entry) => entry.id === participantId) ? `player` : `spectator`;
+        if (role === `player`) {
+            assert.ok(isFakePlayer(participant));
+            participant.connection = { status: `connected` };
+        } else {
+            assert.ok(isFakeSpectator(participant));
+            participant.socketId = socketId;
+        }
         this.socketParticipations.set(socketId, { session, participant, role });
 
         return {
@@ -137,16 +160,40 @@ class FakeSessionManager {
     async leaveSession(_session: FakeSession, participantId: string) {
         for (const [socketId, participation] of this.socketParticipations.entries()) {
             if (participation.participant.id === participantId) {
+                if (participation.role === `player`) {
+                    assert.ok(isFakePlayer(participation.participant));
+                    participation.participant.connection = { status: `disconnected` };
+                } else {
+                    assert.ok(isFakeSpectator(participation.participant));
+                    participation.participant.socketId = null;
+                }
                 this.socketParticipations.delete(socketId);
             }
         }
     }
 
     handleSocketDisconnect(socketId: string) {
+        const participation = this.socketParticipations.get(socketId);
+        if (participation) {
+            if (participation.role === `player`) {
+                assert.ok(isFakePlayer(participation.participant));
+                participation.participant.connection = { status: `disconnected` };
+            } else {
+                assert.ok(isFakeSpectator(participation.participant));
+                participation.participant.socketId = null;
+            }
+        }
+
         this.socketParticipations.delete(socketId);
     }
 
     async surrenderSession(): Promise<void> { }
+
+    async requestDraw(): Promise<void> { }
+
+    async acceptDraw(): Promise<void> { }
+
+    async declineDraw(): Promise<void> { }
 
     async requestRematch() {
         return { status: `pending` as const };
@@ -162,14 +209,14 @@ class FakeSessionManager {
 
     sendChatMessage(): void { }
 
-    emitSessionUpdate(sessionId: string, session: SessionUpdatedEvent[`session`]) {
+    emitSessionUpdate(sessionId: SessionId, session: SessionUpdatedEvent[`session`]) {
         this.eventHandlers.sessionUpdated?.({
             sessionId,
             session,
         });
     }
 
-    emitGameState(sessionId: string, gameState: Partial<GameState>) {
+    emitGameState(sessionId: SessionId, gameState: Partial<GameState>) {
         this.eventHandlers.gameStateUpdated?.({
             sessionId,
             gameState,
@@ -181,7 +228,7 @@ class FakeSessionManager {
             id: session.id,
             gameOptions: structuredClone(session.gameOptions),
             players: structuredClone(session.players),
-            spectators: structuredClone(session.spectators),
+            spectators: session.spectators.map(({ socketId: _socketId, ...spectator }) => structuredClone(spectator)),
             chat: structuredClone(session.chat),
             state: structuredClone(session.state),
             tournament: session.tournament ? structuredClone(session.tournament) : null,
@@ -215,7 +262,7 @@ class FakeCorsConfiguration {
     options = undefined;
 }
 
-function createParticipant(id: string, displayName: string): FakeParticipant {
+function createParticipant(id: string, displayName: string): FakePlayer {
     return {
         id,
         displayName,
@@ -228,12 +275,13 @@ function createParticipant(id: string, displayName: string): FakeParticipant {
 
 function createFakeSession(sessionId: string, status: SessionInfo[`state`][`status`]): FakeSession {
     return {
-        id: sessionId,
+        id: sessionId as SessionId,
         gameState: createEmptyGameState(),
         gameOptions: {
             visibility: `public`,
             rated: false,
             timeControl: { mode: `unlimited` },
+            firstPlayer: `random`,
         },
         players: [
             createParticipant(`${sessionId}-left`, `Alpha ${sessionId}`),
@@ -250,6 +298,8 @@ function createFakeSession(sessionId: string, status: SessionInfo[`state`][`stat
                 status,
                 startedAt: 1_700_000_000_000,
                 gameId: `${sessionId}-game`,
+                drawRequest: null,
+                drawRequestAvailableAfterTurn: 50,
             }
             : status === `finished`
                 ? {

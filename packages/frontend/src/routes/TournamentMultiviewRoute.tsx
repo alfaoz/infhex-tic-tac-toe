@@ -1,4 +1,4 @@
-import type { TournamentMatch } from '@ih3t/shared';
+import type { SessionId, TournamentMatch } from '@ih3t/shared';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 import { Navigate, useParams } from 'react-router';
@@ -135,7 +135,7 @@ function TournamentMultiviewRoute() {
 
         return () => {
             for (const sessionId of subscribedSessionIdsRef.current) {
-                unwatchSession(sessionId);
+                unwatchSession(sessionId as SessionId);
             }
 
             subscribedSessionIdsRef.current.clear();
@@ -159,14 +159,14 @@ function TournamentMultiviewRoute() {
 
         for (const sessionId of previousSessionIds) {
             if (!nextSessionIds.has(sessionId)) {
-                unwatchSession(sessionId);
+                unwatchSession(sessionId as SessionId);
             }
         }
 
         for (const sessionId of nextSessionIds) {
             if (!previousSessionIds.has(sessionId)) {
                 markSessionLoading(sessionId);
-                watchSession(sessionId);
+                watchSession(sessionId as SessionId);
             }
         }
 

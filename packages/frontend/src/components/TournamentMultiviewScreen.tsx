@@ -1,4 +1,4 @@
-import type { GameState, LobbyOptions, SessionParticipant } from '@ih3t/shared';
+import type { GameState, LobbyOptions, SessionPlayer } from '@ih3t/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -29,7 +29,7 @@ export type TournamentMultiviewTileViewModel = {
     statusLabel: string
     statusLine: string
     errorMessage: string | null
-    players: SessionParticipant[]
+    players: SessionPlayer[]
     gameState: GameState | null
     reviewPath: string | null
     finishedTitle: string | null
@@ -113,7 +113,7 @@ function MultiviewTimerStrip({
     status: TournamentMultiviewTileViewModel[`status`]
     gameOptions: LobbyOptions | null
     gameState: GameState | null
-    players: SessionParticipant[]
+    players: SessionPlayer[]
 }>) {
     const shouldTick = status === `live` && gameState?.currentTurnExpiresAt !== null;
     const [nowMs, setNowMs] = useState(() => Date.now());

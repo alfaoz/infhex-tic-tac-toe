@@ -1,4 +1,4 @@
-import type { SessionParticipant } from '@ih3t/shared';
+import type { SessionPlayer } from '@ih3t/shared';
 import { createStartedGameState, zCellOccupant } from '@ih3t/shared';
 import { expect, test } from '@playwright/experimental-ct-react';
 
@@ -15,7 +15,7 @@ test.describe(`Tournament multiview`, () => {
         },
     });
 
-    function createPlayers(prefix: string): SessionParticipant[] {
+    function createPlayers(prefix: string): SessionPlayer[] {
         return [
             {
                 id: `${prefix}-left`,
@@ -84,6 +84,7 @@ test.describe(`Tournament multiview`, () => {
                     turnTimeMs: 20_000,
                 },
                 rated: false,
+                firstPlayer: `random`,
             },
             bestOf: 3,
             leftWins: index,

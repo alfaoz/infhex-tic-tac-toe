@@ -378,13 +378,13 @@ export function joinSession(sessionId: SessionId) {
     });
 }
 
-export function watchSession(sessionId: string) {
+export function watchSession(sessionId: SessionId) {
     socket?.emit(`watch-session`, {
         sessionId,
     });
 }
 
-export function unwatchSession(sessionId: string) {
+export function unwatchSession(sessionId: SessionId) {
     socket?.emit(`unwatch-session`, {
         sessionId,
     });
