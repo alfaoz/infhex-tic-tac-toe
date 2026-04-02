@@ -20,7 +20,7 @@ export type UserRole = z.infer<typeof zUserRole>;
 export const zSessionParticipantRole = z.enum([`player`, `spectator`]);
 export type SessionParticipantRole = z.infer<typeof zSessionParticipantRole>;
 
-export const zParticipantConnection = z.discriminatedUnion(`status`, [
+export const zPlayerConnection = z.discriminatedUnion(`status`, [
     z.object({
         status: z.literal(`connected`),
     }),
@@ -31,7 +31,7 @@ export const zParticipantConnection = z.discriminatedUnion(`status`, [
         status: z.literal(`disconnected`),
     }),
 ]);
-export type ParticipantConnection = z.infer<typeof zParticipantConnection>;
+export type PlayerConnection = z.infer<typeof zPlayerConnection>;
 
 export const zCellOccupant = z.string().brand<`CellOccupant`>();
 export type CellOccupant = z.infer<typeof zCellOccupant>;
@@ -442,30 +442,6 @@ function selectWinningLineSegment(line: readonly HexCoordinate[], pivotIndex: nu
     return line.slice(startIndex, startIndex + WINNING_LINE_LENGTH);
 }
 
-export const zPlayerRating = z.object({
-    eloScore: z.number(),
-    gameCount: z.number().nonnegative(),
-});
-export type PlayerRating = z.infer<typeof zPlayerRating>;
-
-export const zPlayerRatingAdjustment = z.object({
-    eloGain: z.number(),
-    eloLoss: z.number(),
-});
-export type PlayerRatingAdjustment = z.infer<typeof zPlayerRatingAdjustment>;
-
-export const zSessionParticipant = z.object({
-    id: zIdentifier,
-    connection: zParticipantConnection,
-
-    displayName: z.string(),
-    profileId: zIdentifier.nullable(),
-
-    rating: zPlayerRating,
-    ratingAdjustment: zPlayerRatingAdjustment.nullable().default(null),
-});
-export type SessionParticipant = z.infer<typeof zSessionParticipant>;
-
 export const zLobbyListParticipant = z.object({
     displayName: z.string(),
     profileId: zIdentifier.nullable(),
@@ -490,6 +466,37 @@ export const zSessionChat = z.object({
     displayNames: z.record(z.string(), z.string()),
 });
 export type SessionChat = z.infer<typeof zSessionChat>;
+
+export const zPlayerRating = z.object({
+    eloScore: z.number(),
+    gameCount: z.number().nonnegative(),
+});
+export type PlayerRating = z.infer<typeof zPlayerRating>;
+
+export const zPlayerRatingAdjustment = z.object({
+    eloGain: z.number(),
+    eloLoss: z.number(),
+});
+export type PlayerRatingAdjustment = z.infer<typeof zPlayerRatingAdjustment>;
+
+export const zSessionPlayer = z.object({
+    id: zIdentifier,
+    connection: zPlayerConnection,
+
+    displayName: z.string(),
+    profileId: zIdentifier.nullable(),
+
+    rating: zPlayerRating,
+    ratingAdjustment: zPlayerRatingAdjustment.nullable().default(null),
+});
+export type SessionPlayer = z.infer<typeof zSessionPlayer>;
+
+export const zSessionSpectator = z.object({
+    id: zIdentifier,
+    displayName: z.string(),
+    profileId: zIdentifier.nullable(),
+});
+export type SessionSpectator = z.infer<typeof zSessionSpectator>;
 
 export const zSessionState = z.discriminatedUnion(`status`, [
     z.object({
@@ -517,8 +524,8 @@ export const zSessionInfo = z.object({
     id: zIdentifier,
     gameOptions: zLobbyOptions,
 
-    players: z.array(zSessionParticipant),
-    spectators: z.array(zSessionParticipant),
+    players: z.array(zSessionPlayer),
+    spectators: z.array(zSessionSpectator),
 
     chat: zSessionChat,
     state: zSessionState,
@@ -526,8 +533,7 @@ export const zSessionInfo = z.object({
 export type SessionInfo = z.infer<typeof zSessionInfo>;
 
 export const zGameMove = z.object({
-    moveNumber: z.number().int()
-        .nonnegative(),
+    moveNumber: z.number().int().nonnegative(),
     playerId: zIdentifier,
     x: zCoordinate,
     y: zCoordinate,

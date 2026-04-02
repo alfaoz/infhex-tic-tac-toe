@@ -1,4 +1,4 @@
-import type { GameState, LobbyOptions, SessionChat, SessionParticipant, SessionParticipantRole, ShutdownState } from '@ih3t/shared';
+import type { GameState, LobbyOptions, SessionChat, SessionPlayer, SessionParticipantRole, ShutdownState } from '@ih3t/shared';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 
@@ -14,7 +14,7 @@ import useGameBoard from './game-screen/useGameBoard';
 type GameScreenProps = {
     sessionId: string
     gameId: string
-    players: SessionParticipant[]
+    players: SessionPlayer[]
     gameOptions: LobbyOptions
     participantRole: SessionParticipantRole
     currentPlayerId: string

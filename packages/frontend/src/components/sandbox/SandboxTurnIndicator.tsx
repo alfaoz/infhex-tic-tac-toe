@@ -1,9 +1,9 @@
-import type { GameState, SessionParticipant } from '@ih3t/shared';
+import type { GameState, SessionPlayer } from '@ih3t/shared';
 
 import { getPlayerLabel, getPlayerTileColor } from '../../utils/gameBoard';
 
 type SandboxTurnIndicatorProps = {
-    players: SessionParticipant[]
+    players: SessionPlayer[]
     gameState: GameState
     winnerId: string | null
     botPlayerIds?: readonly string[]

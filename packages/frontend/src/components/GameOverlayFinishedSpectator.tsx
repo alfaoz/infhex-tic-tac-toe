@@ -1,4 +1,4 @@
-import type { SessionParticipant, SessionStateFinished } from '@ih3t/shared';
+import type { SessionPlayer, SessionStateFinished } from '@ih3t/shared';
 import type { MouseEvent } from 'react';
 import { NavLink } from 'react-router';
 
@@ -7,7 +7,7 @@ import { getSpectatorRematchStatus, getSpectatorResultMessage, getSpectatorResul
 
 
 type GameOverlayFinishedSpectatorProps = {
-    players: SessionParticipant[],
+    players: SessionPlayer[],
     state: SessionStateFinished,
 
     onReturnToLobby: () => void

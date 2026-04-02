@@ -1,4 +1,4 @@
-import type { GameState, LobbyOptions, SessionParticipant } from '@ih3t/shared';
+import type { GameState, LobbyOptions, SessionPlayer } from '@ih3t/shared';
 import { useEffect, useRef, useState } from 'react';
 
 import { playCountdownWarningSound } from '../../soundEffects';
@@ -7,7 +7,7 @@ import { getPlayerLabel, getPlayerTileColor } from '../../utils/gameBoard';
 
 type TurnTimerHudProps = {
     gameOptions: LobbyOptions
-    players: SessionParticipant[]
+    players: SessionPlayer[]
     gameState: GameState
     localPlayerId: string | null
 };
@@ -166,7 +166,7 @@ function TurnTimerHud({
                                     : isSpectator
                                         ? `text-sky-300`
                                         : `text-slate-300`
-                                }`}
+                                    }`}
                                 style={spectatorAccentTextStyle}
                             >
                                 <span
@@ -202,7 +202,7 @@ function TurnTimerHud({
                                         className={`rounded-md border px-2 py-1.5 sm:px-2.5 sm:py-2 ${isActivePlayer
                                             ? `border-emerald-300/35 bg-emerald-400/12 shadow-[0_0_0_1px_rgba(110,231,183,0.12)]`
                                             : `border-white/10 bg-white/6`
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex min-w-0 items-center gap-1.5">

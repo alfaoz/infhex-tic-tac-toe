@@ -1,4 +1,4 @@
-import type { SessionParticipant, SessionStateFinished } from '@ih3t/shared';
+import type { SessionPlayer, SessionStateFinished } from '@ih3t/shared';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { NavLink } from 'react-router';
 
@@ -9,7 +9,7 @@ import { getPlayerResultMessage } from '../utils/sessionResult';
 
 type GameOverlayFinishedPlayerProps = {
     state: SessionStateFinished,
-    players: SessionParticipant[],
+    players: SessionPlayer[],
     localPlayerId: string,
 
     onReturnToLobby: () => void
@@ -79,7 +79,7 @@ type RematchState = {
     label: string,
 };
 
-function getRematchState(state: SessionStateFinished, players: SessionParticipant[], localPlayerId: string): RematchState {
+function getRematchState(state: SessionStateFinished, players: SessionPlayer[], localPlayerId: string): RematchState {
     if (state.finishReason === `terminated`) {
         return {
             enabled: false,
@@ -214,8 +214,8 @@ function GameOverlayFinishedPlayer({
                                         {eloSummary.eloChange === 0
                                             ? `The match ended level, so your rating stayed where it is.`
                                             : eloSummary.eloChange >= 0
-                                            ? `Strong finish. Your rating climbed, and you are building momentum.`
-                                            : `Tough result, but every match sharpens your game. The next climb starts here.`}
+                                                ? `Strong finish. Your rating climbed, and you are building momentum.`
+                                                : `Tough result, but every match sharpens your game. The next climb starts here.`}
                                     </p>
                                 </div>
                             )}

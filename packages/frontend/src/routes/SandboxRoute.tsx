@@ -8,7 +8,7 @@ import {
     type SandboxGamePosition,
     type SandboxPlayerSlot,
     type SandboxPositionResponse,
-    type SessionParticipant,
+    type SessionPlayer,
 } from '@ih3t/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -47,7 +47,7 @@ type SandboxSnapshot = {
     gameHistory: GameState[]
 };
 
-const SANDBOX_PLAYERS: SessionParticipant[] = [
+const SANDBOX_PLAYERS: SessionPlayer[] = [
     {
         id: `sandbox-player-1`,
         displayName: `Player 1`,

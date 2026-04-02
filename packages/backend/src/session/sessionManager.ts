@@ -12,7 +12,6 @@ import type {
     SessionChatSenderId,
     SessionFinishReason,
     SessionInfo,
-    SessionParticipantRole,
     SessionState,
 } from '@ih3t/shared';
 import { buildPlayerTileConfigMap, DRAW_REQUEST_RETRY_TURNS } from '@ih3t/shared';
@@ -24,9 +23,7 @@ import { ServerShutdownService, type ShutdownHook } from '../admin/serverShutdow
 import { EloHandler } from '../elo/eloHandler';
 import { ROOT_LOGGER } from '../logger';
 import { MetricsTracker } from '../metrics/metricsTracker';
-import {
-    GameHistoryRepository,
-} from '../persistence/gameHistoryRepository';
+import { GameHistoryRepository } from '../persistence/gameHistoryRepository';
 import { GameSimulation, SimulationError } from '../simulation/gameSimulation';
 import { GameTimeControlError, GameTimeControlManager } from '../simulation/gameTimeControlManager';
 import type {
@@ -36,16 +33,17 @@ import type {
     PlayerLeaveSource,
     RematchRequestResult,
     ServerGameSession,
-    ServerParticipantConnection,
-    ServerSessionParticipant,
+    ServerPlayerConnection,
     ServerSessionParticipation,
+    ServerSessionPlayer,
     SessionManagerEventHandlers,
 } from './types';
 import {
     cloneChatMessage,
     cloneGameOptions,
-    cloneParticipants,
     createGameSession,
+    toSessionPlayer,
+    toSessionSpectator,
 } from './types';
 
 export class SessionError extends Error {
@@ -229,17 +227,15 @@ export class SessionManager {
         }
 
 
-        let participantRole: SessionParticipantRole;
-        let participant: ServerSessionParticipant;
+        let participation: ServerSessionParticipation;
         switch (session.state) {
             case `lobby`: {
-
                 if (session.players.length >= MAX_PLAYERS_PER_SESSION) {
                     throw new SessionError(`Session is full`);
                 }
 
                 if (profileId && session.players.some((player) => player.profileId === profileId)) {
-                /* a player with that profile is already in the lobby */
+                    /* a player with that profile is already in the lobby */
                     if (session.gameOptions.rated) {
                         throw new SessionError(`You cannot join your own rated lobby as the second player.`);
                     } else if (!params.allowSelfJoinCasualGames) {
@@ -259,63 +255,59 @@ export class SessionManager {
                     }
                 }
 
-                participantRole = `player`;
-                session.players.push(participant = {
-                    id: this.createParticipantId(session),
+                participation = {
+                    role: `player`,
+                    participant: {
+                        id: this.createParticipantId(session),
 
-                    deviceId: params.deviceId,
-                    profileId: params.profile?.id ?? null,
-                    displayName,
+                        deviceId: params.deviceId,
+                        profileId: params.profile?.id ?? null,
+                        displayName,
 
-                    rating: playerRating,
-                    ratingAdjustment: null,
-                    ratingAdjusted: null,
+                        rating: playerRating,
+                        ratingAdjustment: null,
+                        ratingAdjusted: null,
 
-                    connection: { status: `disconnected`, timestamp: Date.now() },
-                });
+                        connection: { status: `disconnected`, timestamp: Date.now() },
+                    }
+                };
+
+                session.players.push(participation.participant);
                 session.hadPlayers = true;
                 break;
             }
 
             case `in-game`:
             case `finished`:
-                participantRole = `spectator`;
-                session.spectators.push(participant = {
-                    id: this.createParticipantId(session),
+                participation = {
+                    role: `spectator`,
+                    participant: {
+                        id: this.createParticipantId(session),
 
-                    deviceId: params.deviceId,
-                    profileId: params.profile?.id ?? null,
-                    displayName: params.displayName,
+                        profileId: params.profile?.id ?? null,
+                        displayName: params.displayName,
 
-                    rating: playerRating,
-                    ratingAdjustment: null,
-                    ratingAdjusted: null,
-
-                    connection: { status: `disconnected`, timestamp: Date.now() },
-                });
+                        socketId: null,
+                    }
+                }
                 break;
         }
 
         this.metricsTracker.track(`session-joined`, {
             sessionId: session.id,
 
-            participantId: participant.id,
-            participantRole,
-
+            participation,
             players: session.players.map(({ id }) => id),
             spectators: session.spectators.map(({ id }) => id),
         });
 
         this.emitSessionUpdated(
             session,
-            [participantRole === `player` ? `players` : `spectators`],
+            [participation.role === `player` ? `players` : `spectators`],
         );
         this.emitLobbyUpdated(session);
 
-        return {
-            participant,
-            role: participantRole,
-        };
+        return participation;
     }
 
     async leaveSession(session: ServerGameSession, participantId: string, source: PlayerLeaveSource) {
@@ -570,22 +562,15 @@ export class SessionManager {
                 });
                 rematchSession.players.reverse();
 
-                rematchSession.spectators = originalSession.spectators.map(player => {
+                rematchSession.spectators = originalSession.spectators.map(spectator => {
                     const newParticipantId = this.createParticipantId(rematchSession);
-                    participantMapping[player.id] = newParticipantId;
+                    participantMapping[spectator.id] = newParticipantId;
 
                     return {
                         id: newParticipantId,
-                        deviceId: player.deviceId,
-
-                        connection: { status: `disconnected`, timestamp: Date.now() },
-                        displayName: player.displayName,
-
-                        rating: player.ratingAdjusted ?? player.rating,
-                        ratingAdjustment: null,
-                        ratingAdjusted: null,
-
-                        profileId: player.profileId,
+                        profileId: spectator.profileId,
+                        displayName: spectator.displayName,
+                        socketId: spectator.socketId
                     };
                 });
 
@@ -596,15 +581,23 @@ export class SessionManager {
                     senderId: participantMapping[message.senderId] as SessionChatSenderId,
                 }));
 
-                for (const { participant } of this.getAllParticipations(originalSession)) {
-                    if (participant.connection.status === `connected`) {
-                        socketMapping[participantMapping[participant.id]] = participant.connection.socketId;
+                for (const player of originalSession.players) {
+                    if (player.connection.status === `connected`) {
+                        socketMapping[participantMapping[player.id]] = player.connection.socketId;
                     }
 
-                    if (participant.connection.status !== `disconnected`) {
+                    if (player.connection.status !== `disconnected`) {
                         /* mark all clients as disconnected in the old session */
-                        this.updateParticipantConnection(participant, { status: `disconnected`, timestamp: Date.now() });
+                        this.updatePlayerConnection(player, { status: `disconnected`, timestamp: Date.now() });
                     }
+                }
+
+                for (const spectator of originalSession.spectators) {
+                    if (!spectator.socketId) {
+                        continue
+                    }
+
+                    socketMapping[participantMapping[spectator.id]] = spectator.socketId;
                 }
 
                 this.sessions.delete(originalSession.id);
@@ -727,16 +720,15 @@ export class SessionManager {
         }
 
         const connectedPlayers = session.players.filter(spectator => spectator.connection.status !== `disconnected`);
-        const connectedSpectators = session.spectators.filter(spectator => spectator.connection.status !== `disconnected`);
         const sessionAge = Date.now() - session.createdAt;
-        if (connectedPlayers.length === 0 && connectedSpectators.length === 0 && (session.hadPlayers || sessionAge >= 5_000)) {
+        if (connectedPlayers.length === 0 && session.spectators.length === 0 && (session.hadPlayers || sessionAge >= 5_000)) {
             this.deleteSession(session, `empty`);
             return;
         }
 
         switch (session.state) {
             case `lobby`: {
-            /* time out players which could not connect within a certain given time */
+                /* time out players which could not connect within a certain given time */
                 let playersUpdated = false;
                 session.players = session.players.filter(player => {
                     if (player.connection.status !== `disconnected`) {
@@ -757,7 +749,7 @@ export class SessionManager {
                 }
 
                 if (connectedPlayers.length < MAX_PLAYERS_PER_SESSION) {
-                /* lobby not yet full / not all people are connected */
+                    /* lobby not yet full / not all people are connected */
                     break;
                 }
 
@@ -805,7 +797,7 @@ export class SessionManager {
 
             case `in-game`: {
                 if (connectedPlayers.length <= 1) {
-                /* Only one player left. Make him the winner. */
+                    /* Only one player left. Make him the winner. */
                     const [winningPlayer] = connectedPlayers;
                     await this.finishSessionLocked(session, `disconnect`, winningPlayer?.id ?? null);
                     break;
@@ -816,10 +808,10 @@ export class SessionManager {
 
             case `finished`:
                 if (connectedPlayers.length === 0) {
-                /*
-                 * All players have left the session.
-                 * Specators do not count.
-                 */
+                    /*
+                     * All players have left the session.
+                     * Specators do not count.
+                     */
                     this.deleteSession(session, `empty-finished`);
                     return;
                 }
@@ -896,20 +888,20 @@ export class SessionManager {
         void this.tickSession(session);
     }
 
-    private updateParticipantConnection(participant: ServerSessionParticipant, connection: ServerParticipantConnection) {
-        switch (participant.connection.status) {
+    private updatePlayerConnection(player: ServerSessionPlayer, connection: ServerPlayerConnection) {
+        switch (player.connection.status) {
             case `connected`:
             case `disconnected`:
-            /* no cleanup needed */
+                /* no cleanup needed */
                 break;
 
             case `orphaned`:
-            /* clear pending timeout */
-                clearTimeout(participant.connection.timeout);
+                /* clear pending timeout */
+                clearTimeout(player.connection.timeout);
                 break;
         }
 
-        participant.connection = connection;
+        player.connection = connection;
     }
 
     private disconnectPlayerFromSessionLocked(session: ServerGameSession, participantId: string, source: PlayerLeaveSource): void {
@@ -919,7 +911,7 @@ export class SessionManager {
         }
 
         const player = session.players[index];
-        this.updateParticipantConnection(player, { status: `disconnected`, timestamp: Date.now() });
+        this.updatePlayerConnection(player, { status: `disconnected`, timestamp: Date.now() });
 
         if (session.state === `lobby`) {
             /* players can just leave and are removed from the session */
@@ -955,8 +947,7 @@ export class SessionManager {
             return;
         }
 
-        const [spectator] = session.spectators.splice(index, 1);
-        this.updateParticipantConnection(spectator, { status: `disconnected`, timestamp: Date.now() });
+        const [_spectator] = session.spectators.splice(index, 1);
 
         this.metricsTracker.track(`spectator-left`, {
             sessionId: session.id,
@@ -976,7 +967,12 @@ export class SessionManager {
             throw new SessionError(`Invalid participant id`);
         }
 
-        this.updateParticipantConnection(participation.participant, { status: `connected`, socketId });
+        if (participation.role === "player") {
+            this.updatePlayerConnection(participation.participant, { status: `connected`, socketId });
+        } else {
+            participation.participant.socketId = socketId;
+        }
+
         void this.tickSession(session);
 
         return {
@@ -997,7 +993,7 @@ export class SessionManager {
 
         const shouldOrphanConnection = participation.role === `player` && participation.session.state === `in-game`;
         if (shouldOrphanConnection) {
-            this.updateParticipantConnection(
+            this.updatePlayerConnection(
                 participation.participant,
                 {
                     status: `orphaned`,
@@ -1119,21 +1115,32 @@ export class SessionManager {
 
     getAllParticipations(session: ServerGameSession): ServerSessionParticipation[] {
         return [
-            ...session.players.map(player => ({
-                participant: player,
-                role: `player`,
-            } satisfies ServerSessionParticipation)),
+            ...session.players.map(
+                player => ({
+                    participant: player,
+                    role: `player`,
+                } satisfies ServerSessionParticipation)
+            ),
 
-            ...session.spectators.map(player => ({
-                participant: player,
-                role: `spectator`,
-            } satisfies ServerSessionParticipation)),
+            ...session.spectators.map(
+                player => ({
+                    participant: player,
+                    role: `spectator`,
+                } satisfies ServerSessionParticipation)
+            ),
         ];
     }
 
     findParticipationFromSocketId(socketId: string): { session: ServerGameSession } & ServerSessionParticipation | null {
         for (const session of this.sessions.values()) {
-            const participation = this.getAllParticipations(session).find(({ participant: participation }) => participation.connection.status === `connected` && participation.connection.socketId === socketId);
+            const participation = this.getAllParticipations(session).find(({ participant: participation, role }) => {
+                if (role === `player`) {
+                    return participation.connection.status === `connected` && participation.connection.socketId === socketId
+                } else {
+                    return participation.socketId === socketId
+                }
+            });
+
             if (!participation) {
                 continue;
             }
@@ -1148,16 +1155,16 @@ export class SessionManager {
     }
 
 
-    private findOrphanedParticipation(deviceId: string): { session: ServerGameSession } & ServerSessionParticipation | null {
+    private findOrphanedPlayerConnection(deviceId: string): { session: ServerGameSession, player: ServerSessionPlayer } | null {
         for (const session of this.sessions.values()) {
-            const participation = this.getAllParticipations(session).find(({ participant: participation }) => participation.connection.status === `orphaned` && participation.deviceId === deviceId);
-            if (!participation) {
+            const player = session.players.find(player => player.connection.status === `orphaned` && player.deviceId === deviceId);
+            if (!player) {
                 continue;
             }
 
             return {
-                session: session,
-                ...participation,
+                session,
+                player,
             };
         }
 
@@ -1171,11 +1178,20 @@ export class SessionManager {
         }
 
         return await info.session.lock.runExclusive(() => {
-            if (info.participant.connection.status !== `connected` || info.participant.connection.socketId !== oldSocketId) {
-                return null;
+            switch (info.role) {
+                case 'player':
+                    if (info.participant.connection.status !== `connected` || info.participant.connection.socketId !== oldSocketId) {
+                        return null;
+                    }
+
+                    info.participant.connection.socketId = newSocketId;
+                    break
+
+                case 'spectator':
+                    info.participant.socketId = newSocketId;
+                    break
             }
 
-            info.participant.connection.socketId = newSocketId;
 
             this.logger.info(
                 {
@@ -1199,43 +1215,42 @@ export class SessionManager {
         });
     }
 
-    async participantReclaimSessionFromDeviceId(deviceId: string, socketId: string): Promise<ClientGameParticipation | null> {
-        const info = this.findOrphanedParticipation(deviceId);
+    async reclaimPlayerConnectionFromDeviceId(deviceId: string, socketId: string): Promise<ClientGameParticipation | null> {
+        const info = this.findOrphanedPlayerConnection(deviceId);
         if (!info) {
             return null;
         }
 
         return await info.session.lock.runExclusive(() => {
-            if (info.participant.connection.status !== `orphaned`) {
+            if (info.player.connection.status !== `orphaned`) {
                 /* connection already reclaimed */
                 return null;
             }
 
-            this.updateParticipantConnection(info.participant, {
+            this.updatePlayerConnection(info.player, {
                 status: `connected`,
                 socketId,
             });
 
             this.logger.info({
-                event: `session.connection-reclaimed`,
+                event: `session.player-connection-reclaimed`,
                 sessionId: info.session.id,
-                participantId: info.participant.id,
-                participantRole: info.role,
+                playerId: info.player.id,
                 deviceId,
                 socketId,
             }, `Reclaimed orphaned session connection from device id`);
 
             this.emitSessionUpdated(
                 info.session,
-                [info.role === `player` ? `players` : `spectators`],
+                [`players`],
             );
 
             return {
                 session: this.toSessionInfo(info.session),
                 gameState: this.simulation.getPublicGameState(info.session.gameState),
 
-                participantId: info.participant.id,
-                participantRole: info.role,
+                participantId: info.player.id,
+                participantRole: `player`,
             };
         });
     }
@@ -1301,8 +1316,8 @@ export class SessionManager {
             id: session.id,
             gameOptions: cloneGameOptions(session.gameOptions),
 
-            players: cloneParticipants(session.players),
-            spectators: cloneParticipants(session.spectators),
+            players: session.players.map(toSessionPlayer),
+            spectators: session.spectators.map(toSessionSpectator),
 
             state,
             chat: {
@@ -1437,7 +1452,7 @@ export class SessionManager {
     }
 
     private calculateRatingAdjustments(session: ServerGameSession) {
-        const ratedPlayers = session.players.filter((player): player is ServerSessionParticipant & { profileId: string } => player.profileId !== null);
+        const ratedPlayers = session.players.filter((player): player is ServerSessionPlayer & { profileId: string } => player.profileId !== null);
         if (ratedPlayers.length !== 2) {
             return false;
         }

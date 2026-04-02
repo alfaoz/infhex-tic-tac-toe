@@ -1,6 +1,6 @@
-import type { SessionFinishReason, SessionParticipant, SessionStateFinished } from '@ih3t/shared';
+import type { SessionFinishReason, SessionPlayer, SessionStateFinished } from '@ih3t/shared';
 
-export function getSpectatorRematchStatus(players: SessionParticipant[], state: SessionStateFinished) {
+export function getSpectatorRematchStatus(players: SessionPlayer[], state: SessionStateFinished) {
     const connectedPlayers = players.filter(player => player.connection.status !== `disconnected`);
     const requestingPlayers = players.filter(player => state.rematchAcceptedPlayerIds.includes(player.id));
 

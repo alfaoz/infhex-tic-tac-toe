@@ -5,7 +5,7 @@ import type {
     LobbyInfo,
     LobbyListParticipant,
     SessionInfo,
-    SessionParticipant,
+    SessionPlayer,
 } from '@ih3t/shared';
 
 import { DEFAULT_PAGE_TITLE } from '../components/PageMetadata';
@@ -15,7 +15,7 @@ function formatPlayerLabel(player: LobbyListParticipant) {
     return player.elo > 0 ? `${normalizedName} (${player.elo} ELO)` : normalizedName;
 }
 
-function formatSessionPlayerLabel(player: SessionParticipant) {
+function formatSessionPlayerLabel(player: SessionPlayer) {
     const normalizedName = player.displayName.trim() || `A player`;
     return player.rating.eloScore > 0 ? `${normalizedName} (${player.rating.eloScore} ELO)` : normalizedName;
 }

@@ -7,23 +7,24 @@ import {
     type GameState,
     GameStateEvent,
     type LobbyOptions,
-    type ParticipantConnection,
+    type PlayerConnection,
     PlayerRating,
     SessionChatEvent,
     type SessionChatMessage,
     SessionChatSenderId,
     type SessionFinishReason,
     type SessionInfo,
-    type SessionParticipant,
+    type SessionPlayer,
     type SessionParticipantRole,
     SessionUpdatedEvent,
+    SessionSpectator,
 } from '@ih3t/shared';
 import { Mutex } from 'async-mutex';
 
 import type { AccountUserProfile } from '../auth/authRepository';
 import type { RequestClientInfo } from '../network/clientInfo';
 
-export type ServerParticipantConnection = ParticipantConnection & ({
+export type ServerPlayerConnection = PlayerConnection & ({
     status: `connected`;
     socketId: string;
 } | {
@@ -34,18 +35,28 @@ export type ServerParticipantConnection = ParticipantConnection & ({
     timestamp: number;
 });
 
-export type ServerSessionParticipant = {
+export type ServerSessionPlayer = SessionPlayer & {
     deviceId: string
 
+    // New players rating
     ratingAdjusted: PlayerRating | null,
 
-    connection: ServerParticipantConnection
-} & SessionParticipant;
-
-export type ServerSessionParticipation = {
-    participant: ServerSessionParticipant,
-    role: SessionParticipantRole,
+    connection: ServerPlayerConnection
 };
+
+export type ServerSessionSpectator = SessionSpectator & {
+    socketId: string | null,
+};
+
+export type ServerSessionParticipation =
+    | {
+        participant: ServerSessionPlayer,
+        role: `player`,
+    }
+    | {
+        participant: ServerSessionSpectator,
+        role: `spectator`
+    }
 
 export type ServerGameSession = {
     id: string;
@@ -53,8 +64,8 @@ export type ServerGameSession = {
     state: `lobby` | `in-game` | `finished`;
 
     hadPlayers: boolean,
-    players: ServerSessionParticipant[];
-    spectators: ServerSessionParticipant[];
+    players: ServerSessionPlayer[];
+    spectators: ServerSessionSpectator[];
 
     gameOptions: LobbyOptions;
     createdAt: number;
@@ -74,8 +85,8 @@ export type PlayerLeaveSource = `leave-session` | `disconnect`;
 
 export type JoinSessionParams = {
     deviceId: string;
-
     profile: AccountUserProfile | null;
+
     displayName: string;
     allowSelfJoinCasualGames: boolean;
 };
@@ -130,7 +141,7 @@ export function cloneGameOptions(gameOptions: LobbyOptions): LobbyOptions {
     };
 }
 
-export function toPublicParticipantConnection(connection: ServerParticipantConnection): ParticipantConnection {
+export function toPlayerConnection(connection: ServerPlayerConnection): PlayerConnection {
     return {
         status: connection.status,
     };
@@ -147,32 +158,36 @@ export function cloneChatMessage(message: SessionChatMessage): SessionChatMessag
     };
 }
 
-export function cloneSessionParticipant(participant: ServerSessionParticipant): SessionParticipant {
+export function toSessionPlayer(player: ServerSessionPlayer): SessionPlayer {
     return {
-        id: participant.id,
+        id: player.id,
 
-        displayName: participant.displayName,
-        profileId: participant.profileId,
+        displayName: player.displayName,
+        profileId: player.profileId,
 
-        rating: participant.rating,
-        ratingAdjustment: participant.ratingAdjustment,
+        rating: player.rating,
+        ratingAdjustment: player.ratingAdjustment,
 
-        connection: toPublicParticipantConnection(participant.connection),
+        connection: toPlayerConnection(player.connection),
     };
 }
 
-export function cloneParticipants(participants: ServerSessionParticipant[]): SessionParticipant[] {
-    return participants.map((participant) => cloneSessionParticipant(participant));
+export function toSessionSpectator(spectator: ServerSessionSpectator): SessionSpectator {
+    return {
+        id: spectator.id,
+        displayName: spectator.displayName,
+        profileId: spectator.profileId
+    }
 }
 
-export function cloneStoredSessionParticipant(participant: ServerSessionParticipant): ServerSessionParticipant {
+export function cloneStoredSessionParticipant(participant: ServerSessionPlayer): ServerSessionPlayer {
     return {
         ...participant,
         connection: { ...participant.connection },
     };
 }
 
-export function cloneStoredParticipants(participants: ServerSessionParticipant[]): ServerSessionParticipant[] {
+export function cloneStoredParticipants(participants: ServerSessionPlayer[]): ServerSessionPlayer[] {
     return participants.map((participant) => cloneStoredSessionParticipant(participant));
 }
 
@@ -199,13 +214,13 @@ export function createGameSession(
 
         gameOptions: cloneGameOptions(gameOptions),
 
-    finishReason: null,
-    winningPlayerId: null,
-    rematchAcceptedPlayerIds: [],
-    isRatedGame: false,
+        finishReason: null,
+        winningPlayerId: null,
+        rematchAcceptedPlayerIds: [],
+        isRatedGame: false,
 
-    gameId: ``,
-    gameState: createEmptyGameState(),
+        gameId: ``,
+        gameState: createEmptyGameState(),
 
         chatNames: {},
         chatMessages: [],

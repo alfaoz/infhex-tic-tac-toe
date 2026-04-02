@@ -1,9 +1,9 @@
-import type { GameState, SessionParticipant } from '@ih3t/shared';
+import type { GameState, SessionPlayer } from '@ih3t/shared';
 
 import { getPlayerLabel, getPlayerTileColor } from '../../utils/gameBoard';
 
 type SandboxWinnerBannerProps = {
-    players: SessionParticipant[]
+    players: SessionPlayer[]
     gameState: GameState
     winnerId: string | null
     onResetBoard: () => void

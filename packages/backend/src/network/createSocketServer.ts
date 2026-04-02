@@ -193,7 +193,7 @@ export class SocketServerGateway {
 
         /* reclaim a game by the device id */
         {
-            const reclaimedSession = await this.sessionManager.participantReclaimSessionFromDeviceId(clientInfo.deviceId ?? ``, socket.id);
+            const reclaimedSession = await this.sessionManager.reclaimPlayerConnectionFromDeviceId(clientInfo.deviceId ?? ``, socket.id);
             if (reclaimedSession) {
                 this.putClientInGameState(socket, reclaimedSession);
             }
