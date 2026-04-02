@@ -5,29 +5,58 @@ import {
     zBoardCell,
     zCoordinate,
     zGameState,
+    zHexCoordinate,
     zIdentifier,
     zLobbyInfo,
     zSessionChatMessage,
     zSessionChatMessageText,
+    zSessionId,
     zSessionInfo,
     zSessionParticipantRole,
-    zShutdownState,
     type AdminBroadcastMessage,
     type LobbyInfo,
     type ShutdownState,
 } from './sharedTypes';
 
 export const zSessionChatMessageRequest = z.object({
+    sessionId: zSessionId,
     message: zSessionChatMessageText,
 });
 export type SessionChatMessageRequest = z.infer<typeof zSessionChatMessageRequest>;
 
 export const zJoinSessionRequest = z.object({
-    sessionId: z.string().trim()
-        .min(1),
+    sessionId: zSessionId,
     username: z.string().optional(),
 });
 export type JoinSessionRequest = z.infer<typeof zJoinSessionRequest>;
+
+export const zClientPingRequest = z.object({});
+export type ClientPingRequest = z.infer<typeof zClientPingRequest>;
+
+export const zLeaveSessionRequest = z.object({
+    sessionId: zSessionId,
+});
+export type LeaveSessionRequest = z.infer<typeof zLeaveSessionRequest>;
+
+export const zSurrenderSessionRequest = z.object({
+    sessionId: zSessionId,
+});
+export type SurrenderSessionRequest = z.infer<typeof zSurrenderSessionRequest>;
+
+export const zRequestSessionDrawRequest = z.object({
+    sessionId: zSessionId,
+});
+export type RequestSessionDrawRequest = z.infer<typeof zRequestSessionDrawRequest>;
+
+export const zAcceptSessionDrawRequest = z.object({
+    sessionId: zSessionId,
+});
+export type AcceptSessionDrawRequest = z.infer<typeof zAcceptSessionDrawRequest>;
+
+export const zDeclineSessionDrawRequest = z.object({
+    sessionId: zSessionId,
+});
+export type DeclineSessionDrawRequest = z.infer<typeof zDeclineSessionDrawRequest>;
 
 export const zSessionJoinedEvent = z.object({
     session: zSessionInfo,
@@ -39,36 +68,46 @@ export const zSessionJoinedEvent = z.object({
 export type SessionJoinedEvent = z.infer<typeof zSessionJoinedEvent>;
 
 export const zSessionUpdatedEvent = z.object({
-    sessionId: zIdentifier,
+    sessionId: zSessionId,
     session: zSessionInfo.partial(),
 });
 export type SessionUpdatedEvent = z.infer<typeof zSessionUpdatedEvent>;
 
 export const zSessionChatEvent = z.object({
-    sessionId: z.string(),
+    sessionId: zSessionId,
     message: zSessionChatMessage,
     senderDisplayName: z.string(),
 });
 export type SessionChatEvent = z.infer<typeof zSessionChatEvent>;
 
 export const zGameStateEvent = z.object({
-    sessionId: zIdentifier,
+    sessionId: zSessionId,
     gameState: zGameState.partial(),
 });
 export type GameStateEvent = z.infer<typeof zGameStateEvent>;
 
 export const zGameCellPlaceEvent = z.object({
-    sessionId: zIdentifier,
+    sessionId: zSessionId,
     state: zGameState.partial(),
     cell: zBoardCell,
 });
 export type GameCellPlaceEvent = z.infer<typeof zGameCellPlaceEvent>;
 
 export const zPlaceCellRequest = z.object({
-    x: zCoordinate,
-    y: zCoordinate,
+    sessionId: zSessionId,
+    cell: zHexCoordinate,
 });
 export type PlaceCellRequest = z.infer<typeof zPlaceCellRequest>;
+
+export const zRequestRematchRequest = z.object({
+    sessionId: zSessionId,
+});
+export type RequestRematchRequest = z.infer<typeof zRequestRematchRequest>;
+
+export const zCancelRematchRequest = z.object({
+    sessionId: zSessionId,
+});
+export type CancelRematchRequest = z.infer<typeof zCancelRematchRequest>;
 
 export const zEventLobbyUpdated = zLobbyInfo;
 export type EventLobbyUpdated = z.infer<typeof zEventLobbyUpdated>;
@@ -76,7 +115,7 @@ export type EventLobbyUpdated = z.infer<typeof zEventLobbyUpdated>;
 export const zEventLobbyRemoved = z.object({ id: z.string() });
 export type EventLobbyRemoved = z.infer<typeof zEventLobbyRemoved>;
 
-export const zServerToClientEvents = z.custom<{
+export type ServerToClientEvents = {
     initialized: () => void;
 
     'lobby-list': (lobbies: LobbyInfo[]) => void;
@@ -95,23 +134,21 @@ export const zServerToClientEvents = z.custom<{
     'game-cell-place': (data: GameCellPlaceEvent) => void;
 
     error: (error: string) => void;
-}>();
-export type ServerToClientEvents = z.infer<typeof zServerToClientEvents>;
+};
 
-export const zClientToServerEvents = z.custom<{
-    'client-ping': () => void;
+export type ClientToServerEvents = {
+    'client-ping': (request: ClientPingRequest) => void;
     'join-session': (request: JoinSessionRequest) => void;
-    'leave-session': (sessionId: string) => void;
-    'surrender-session': (sessionId: string) => void;
-    'request-session-draw': (sessionId: string) => void;
-    'accept-session-draw': (sessionId: string) => void;
-    'decline-session-draw': (sessionId: string) => void;
+    'leave-session': (request: LeaveSessionRequest) => void;
+    'surrender-session': (request: SurrenderSessionRequest) => void;
+    'request-session-draw': (request: RequestSessionDrawRequest) => void;
+    'accept-session-draw': (request: AcceptSessionDrawRequest) => void;
+    'decline-session-draw': (request: DeclineSessionDrawRequest) => void;
     'place-cell': (data: PlaceCellRequest) => void;
     'send-session-chat-message': (data: SessionChatMessageRequest) => void;
-    'request-rematch': (sessionId: string) => void;
-    'cancel-rematch': (sessionId: string) => void;
-}>();
-export type ClientToServerEvents = z.infer<typeof zClientToServerEvents>;
+    'request-rematch': (request: RequestRematchRequest) => void;
+    'cancel-rematch': (request: CancelRematchRequest) => void;
+};
 
 export const zSocketIOClientAuthPayload = z.object({
     deviceId: z.uuidv4(),

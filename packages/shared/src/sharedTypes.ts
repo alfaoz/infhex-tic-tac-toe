@@ -520,8 +520,11 @@ export const zSessionState = z.discriminatedUnion(`status`, [
 export type SessionState = z.infer<typeof zSessionState>;
 export type SessionStateFinished = Extract<SessionState, { status: `finished` }>;
 
+export const zSessionId = zIdentifier.min(1).brand(`SessionId`);
+export type SessionId = z.infer<typeof zSessionId>;
+
 export const zSessionInfo = z.object({
-    id: zIdentifier,
+    id: zSessionId,
     gameOptions: zLobbyOptions,
 
     players: z.array(zSessionPlayer),

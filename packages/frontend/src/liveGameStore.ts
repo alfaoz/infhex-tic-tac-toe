@@ -3,6 +3,7 @@ import {
     type GameState,
     GameStateEvent,
     SessionChatEvent,
+    SessionId,
     type SessionInfo,
     SessionJoinedEvent,
     SessionParticipantRole,
@@ -12,9 +13,9 @@ import { immer } from 'zustand/middleware/immer';
 
 type PendingSessionJoinState
     = | { status: `idle`; sessionId: null; errorMessage: null }
-    | { status: `pending`; sessionId: string; errorMessage: null }
-    | { status: `not-found`; sessionId: string; errorMessage: string }
-    | { status: `failed`; sessionId: string; errorMessage: string };
+    | { status: `pending`; sessionId: SessionId; errorMessage: null }
+    | { status: `not-found`; sessionId: SessionId; errorMessage: string }
+    | { status: `failed`; sessionId: SessionId; errorMessage: string };
 
 type ActiveSession = SessionInfo & {
     localParticipantId: string
@@ -38,8 +39,8 @@ type LiveGameStoreState = {
     onSocketDisconnected: () => void
     setConnectionUnstable: (isUnstable: boolean) => void
 
-    startJoiningSession: (sessionId: string) => void
-    failJoiningSession: (sessionId: string, errorMessage: string) => void
+    startJoiningSession: (sessionId: SessionId) => void
+    failJoiningSession: (sessionId: SessionId, errorMessage: string) => void
 
     setupSession: (payload: SessionJoinedEvent) => void
     clearSession: () => void

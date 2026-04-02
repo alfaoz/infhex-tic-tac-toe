@@ -6,9 +6,18 @@ import {
     DEFAULT_ACCOUNT_PREFERENCES,
     type LobbyInfo,
     type ServerToClientEvents,
+    SessionId,
+    SessionParticipantRole,
+    zAcceptSessionDrawRequest,
+    zCancelRematchRequest,
+    zDeclineSessionDrawRequest,
     zJoinSessionRequest,
+    zLeaveSessionRequest,
     zPlaceCellRequest,
+    zRequestRematchRequest,
+    zRequestSessionDrawRequest,
     zSessionChatMessageRequest,
+    zSurrenderSessionRequest,
 } from '@ih3t/shared';
 import { Mutex } from 'async-mutex';
 import type { Logger } from 'pino';
@@ -28,10 +37,15 @@ import { CorsConfiguration } from './cors';
 
 type Participation = {
     sessionId: string,
+    participantRole: SessionParticipantRole,
     participantId: string,
 };
 
-type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+type ClientSocketData = {
+    participations: Map<string, Participation>,
+}
+
+type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents, any, ClientSocketData>;
 
 const LOBBY_LIST_DEBOUNCE_MS = 1_000;
 
@@ -89,7 +103,6 @@ class UpdateDebouncer<T> {
 @injectable()
 export class SocketServerGateway {
     private readonly logger: Logger;
-    private readonly socketParticipations = new Map<string, Participation>();
     private readonly connections = new Map<string, ClientSocket>();
     private lobbyPendingUpdates = new Map<string, UpdateDebouncer<LobbyInfo>>();
 
@@ -182,9 +195,9 @@ export class SocketServerGateway {
         const connectionId = `${clientInfo.deviceId}:${clientInfo.ephemeralClientId}`;
         if (this.connections.has(connectionId)) {
             const oldConnection = this.connections.get(connectionId)!;
-            const reclaimedParticipation = await this.sessionManager.participantTransferConnection(oldConnection.id, socket.id);
-            if (reclaimedParticipation) {
-                this.putClientInGameState(socket, reclaimedParticipation);
+            const transferredParticipations = await this.sessionManager.connectionTransfer(oldConnection.id, socket.id);
+            for (const participation of transferredParticipations) {
+                this.putClientInGameState(socket, participation);
             }
         }
 
@@ -193,9 +206,9 @@ export class SocketServerGateway {
 
         /* reclaim a game by the device id */
         {
-            const reclaimedSession = await this.sessionManager.reclaimPlayerConnectionFromDeviceId(clientInfo.deviceId ?? ``, socket.id);
-            if (reclaimedSession) {
-                this.putClientInGameState(socket, reclaimedSession);
+            const reclaimedSessions = await this.sessionManager.connectionReclaimFromDeviceId(clientInfo.deviceId ?? ``, socket.id);
+            for (const participation of reclaimedSessions) {
+                this.putClientInGameState(socket, participation);
             }
         }
 
@@ -210,7 +223,7 @@ export class SocketServerGateway {
 
         this.bindSocketHandler(socket, `join-session`, zJoinSessionRequest, async request => {
             await participationMutex.runExclusive(async () => {
-                const existingParticipation = this.sessionManager.findParticipationFromSocketId(socket.id);
+                const [existingParticipation] = this.sessionManager.getParticipationsBySocketId(socket.id);
                 if (existingParticipation?.session.id === request.sessionId) {
                     const gameParticipation = this.sessionManager.assignParticipantSocket(
                         existingParticipation.session,
@@ -261,14 +274,14 @@ export class SocketServerGateway {
             });
         });
 
-        this.bindSocketHandler(socket, `leave-session`, z.any(), async () => {
+        this.bindSocketHandler(socket, `leave-session`, zLeaveSessionRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const participation = this.socketParticipations.get(socket.id);
+                const participation = socket.data.participations.get(sessionId);
                 if (!participation) {
                     return;
                 }
 
-                this.socketParticipations.delete(socket.id);
+                socket.data.participations.delete(sessionId);
                 void socket.leave(participation.sessionId);
 
                 const session = this.sessionManager.getSession(participation.sessionId);
@@ -293,45 +306,45 @@ export class SocketServerGateway {
             });
         });
 
-        this.bindSocketHandler(socket, `surrender-session`, z.any(), async () => {
+        this.bindSocketHandler(socket, `surrender-session`, zSurrenderSessionRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const { participantId } = this.requireParticipation(socket, sessionId);
                 const session = this.sessionManager.requireSession(sessionId);
 
                 await this.sessionManager.surrenderSession(session, participantId);
             });
         });
 
-        this.bindSocketHandler(socket, `request-session-draw`, z.any(), async () => {
+        this.bindSocketHandler(socket, `request-session-draw`, zRequestSessionDrawRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const { participantId } = this.requireParticipation(socket, sessionId);
                 const session = this.sessionManager.requireSession(sessionId);
 
                 await this.sessionManager.requestDraw(session, participantId);
             });
         });
 
-        this.bindSocketHandler(socket, `accept-session-draw`, z.any(), async () => {
+        this.bindSocketHandler(socket, `accept-session-draw`, zAcceptSessionDrawRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const { participantId } = this.requireParticipation(socket, sessionId);
                 const session = this.sessionManager.requireSession(sessionId);
 
                 await this.sessionManager.acceptDraw(session, participantId);
             });
         });
 
-        this.bindSocketHandler(socket, `decline-session-draw`, z.any(), async () => {
+        this.bindSocketHandler(socket, `decline-session-draw`, zDeclineSessionDrawRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const { participantId } = this.requireParticipation(socket, sessionId);
                 const session = this.sessionManager.requireSession(sessionId);
 
                 await this.sessionManager.declineDraw(session, participantId);
             });
         });
 
-        this.bindSocketHandler(socket, `request-rematch`, z.any(), async () => {
+        this.bindSocketHandler(socket, `request-rematch`, zRequestRematchRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const { participantId } = this.requireParticipation(socket, sessionId);
 
                 {
                     const session = this.sessionManager.requireSession(sessionId);
@@ -342,7 +355,7 @@ export class SocketServerGateway {
                 }
 
                 const { rematchSession, socketMapping } = await this.sessionManager.createRematchSession(sessionId);
-                for (const { participant } of this.sessionManager.getAllParticipations(rematchSession)) {
+                for (const { participant } of this.sessionManager.getParticipations(rematchSession)) {
                     const socketId = socketMapping[participant.id];
                     if (!socketId) {
                         continue;
@@ -365,9 +378,9 @@ export class SocketServerGateway {
             });
         });
 
-        this.bindSocketHandler(socket, `cancel-rematch`, z.any(), async () => {
+        this.bindSocketHandler(socket, `cancel-rematch`, zCancelRematchRequest, async ({ sessionId }) => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
+                const { participantId } = this.requireParticipation(socket, sessionId);
                 const session = this.sessionManager.requireSession(sessionId);
 
                 await this.sessionManager.cancelRematch(session, participantId);
@@ -376,17 +389,17 @@ export class SocketServerGateway {
 
         this.bindSocketHandler(socket, `place-cell`, zPlaceCellRequest, async request => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
-                const session = this.sessionManager.requireSession(sessionId);
+                const { participantId } = this.requireParticipation(socket, request.sessionId);
+                const session = this.sessionManager.requireSession(request.sessionId);
 
-                await this.sessionManager.placeCell(session, participantId, request.x, request.y);
+                await this.sessionManager.placeCell(session, participantId, request.cell);
             });
         });
 
         this.bindSocketHandler(socket, `send-session-chat-message`, zSessionChatMessageRequest, async request => {
             await participationMutex.runExclusive(async () => {
-                const { sessionId, participantId } = this.requireParticipation(socket.id);
-                const session = this.sessionManager.requireSession(sessionId);
+                const { participantId } = this.requireParticipation(socket, request.sessionId);
+                const session = this.sessionManager.requireSession(request.sessionId);
 
                 this.sessionManager.sendChatMessage(session, participantId, request.message);
             });
@@ -413,7 +426,6 @@ export class SocketServerGateway {
             }, `Socket disconnected`);
 
             await participationMutex.runExclusive(() => {
-                this.socketParticipations.delete(socket.id);
                 this.sessionManager.handleSocketDisconnect(socket.id);
             });
         });
@@ -465,14 +477,14 @@ export class SocketServerGateway {
         return broadcast;
     }
 
-    private getParticipation(socketId: string): Participation | undefined {
-        return this.socketParticipations.get(socketId);
+    private getParticipation(socket: ClientSocket, sessionId: SessionId): Participation | undefined {
+        return socket.data.participations.get(sessionId);
     }
 
-    private requireParticipation(socketId: string): Participation {
-        const participation = this.getParticipation(socketId);
+    private requireParticipation(socket: ClientSocket, sessionId: SessionId): Participation {
+        const participation = this.getParticipation(socket, sessionId);
         if (!participation) {
-            throw new SessionError(`You are not part of a session`);
+            throw new SessionError(`You are not part of that session`);
         }
 
         return participation;
@@ -489,10 +501,14 @@ export class SocketServerGateway {
     }
 
     private putClientInGameState(socket: ClientSocket, participation: ClientGameParticipation) {
-        this.socketParticipations.set(socket.id, {
-            sessionId: participation.session.id,
-            participantId: participation.participantId,
-        });
+        socket.data.participations.set(
+            participation.session.id,
+            {
+                sessionId: participation.session.id,
+                participantId: participation.participantId,
+                participantRole: participation.participantRole
+            }
+        );
 
         void socket.join(participation.session.id);
         socket.emit(`session-joined`, {

@@ -20,6 +20,7 @@ import {
     zShutdownState,
     zTimestamp,
     zPublicAccountProfile,
+    zSessionId,
 } from './sharedTypes';
 
 export const zAdminScheduleShutdownRequest = z.object({
@@ -83,7 +84,7 @@ export const zCreateSessionRequest = z.object({
 export type CreateSessionRequest = z.infer<typeof zCreateSessionRequest>;
 
 export const zCreateSessionResponse = z.object({
-    sessionId: zIdentifier,
+    sessionId: zSessionId,
 });
 export type CreateSessionResponse = z.infer<typeof zCreateSessionResponse>;
 

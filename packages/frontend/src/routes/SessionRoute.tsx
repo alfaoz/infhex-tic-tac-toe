@@ -1,4 +1,4 @@
-import { createEmptyGameState } from '@ih3t/shared';
+import { createEmptyGameState, SessionId } from '@ih3t/shared';
 import type { MouseEvent } from 'react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router';
@@ -191,7 +191,7 @@ function ConfirmLeaveSessionModal({ onStay, onLeave }: Readonly<{
 
 const kEmptyGameState = createEmptyGameState();
 function SessionRoute() {
-    const { sessionId } = useParams<{ sessionId: string }>();
+    const { sessionId } = useParams<{ sessionId: SessionId }>();
 
     const navigate = useNavigate();
 

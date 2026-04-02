@@ -18,6 +18,7 @@ import {
     type SessionParticipantRole,
     SessionUpdatedEvent,
     SessionSpectator,
+    SessionId,
 } from '@ih3t/shared';
 import { Mutex } from 'async-mutex';
 
@@ -50,16 +51,18 @@ export type ServerSessionSpectator = SessionSpectator & {
 
 export type ServerSessionParticipation =
     | {
+        session: ServerGameSession,
         participant: ServerSessionPlayer,
         role: `player`,
     }
     | {
+        session: ServerGameSession,
         participant: ServerSessionSpectator,
         role: `spectator`
     }
 
 export type ServerGameSession = {
-    id: string;
+    id: SessionId;
     lock: Mutex,
     state: `lobby` | `in-game` | `finished`;
 
@@ -196,7 +199,7 @@ export function cloneGameBoard(boardState: GameState): GameState {
 }
 
 export function createGameSession(
-    sessionId: string,
+    sessionId: SessionId,
     gameOptions: LobbyOptions,
 ): ServerGameSession {
     return {

@@ -2,6 +2,7 @@ import type {
     ClientToServerEvents,
     LobbyInfo,
     ServerToClientEvents,
+    SessionId,
     SessionInfo,
 } from '@ih3t/shared';
 import { toast } from 'react-toastify';
@@ -92,7 +93,7 @@ function executeHeartbeat() {
 
     /* 50ms grace due to setInterval inaccuracy */
     if (now - (heartbeatLastPingAt ?? 0) >= HEARTBEAT_PING_INTERVAL_MS - 50) {
-        socket?.emit(`client-ping`);
+        socket?.emit(`client-ping`, {});
         heartbeatLastPingAt = now;
     }
 
@@ -284,7 +285,7 @@ export function stopLiveGameClient() {
     useLiveGameStore.getState().onSocketDisconnected();
 }
 
-export function joinSession(sessionId: string) {
+export function joinSession(sessionId: SessionId) {
     const state = useLiveGameStore.getState();
     if (state.session?.id === sessionId) {
         return;
@@ -303,9 +304,9 @@ export function joinSession(sessionId: string) {
 export function leaveSession() {
     const state = useLiveGameStore.getState();
     if (state.session) {
-        socket?.emit(`leave-session`, state.session.id);
+        socket?.emit(`leave-session`, { sessionId: state.session.id });
     } else if (state.pendingSessionJoin.sessionId) {
-        socket?.emit(`leave-session`, state.pendingSessionJoin.sessionId);
+        socket?.emit(`leave-session`, { sessionId: state.pendingSessionJoin.sessionId });
     }
 
     state.clearSession();
@@ -317,7 +318,7 @@ export function surrenderGame() {
         return;
     }
 
-    socket.emit(`surrender-session`, state.session.id);
+    socket.emit(`surrender-session`, { sessionId: state.session.id });
 }
 
 export function requestSessionDraw() {
@@ -326,7 +327,7 @@ export function requestSessionDraw() {
         return;
     }
 
-    socket?.emit(`request-session-draw`, session.id);
+    socket?.emit(`request-session-draw`, { sessionId: session.id });
 }
 
 export function acceptSessionDraw() {
@@ -335,7 +336,7 @@ export function acceptSessionDraw() {
         return;
     }
 
-    socket?.emit(`accept-session-draw`, session.id);
+    socket?.emit(`accept-session-draw`, { sessionId: session.id });
 }
 
 export function declineSessionDraw() {
@@ -344,13 +345,13 @@ export function declineSessionDraw() {
         return;
     }
 
-    socket?.emit(`decline-session-draw`, session.id);
+    socket?.emit(`decline-session-draw`, { sessionId: session.id });
 }
 
 export function returnToLobby() {
     const state = useLiveGameStore.getState();
     if (state.session) {
-        socket?.emit(`leave-session`, state.session.id);
+        socket?.emit(`leave-session`, { sessionId: state.session.id });
     }
 
     state.clearSession();
@@ -362,7 +363,10 @@ export function placeCell(x: number, y: number) {
         return;
     }
 
-    socket?.emit(`place-cell`, { x, y });
+    socket?.emit(`place-cell`, {
+        sessionId: session.id,
+        cell: { x, y }
+    });
 }
 
 export function sendSessionChatMessage(message: string) {
@@ -371,7 +375,7 @@ export function sendSessionChatMessage(message: string) {
         return;
     }
 
-    socket?.emit(`send-session-chat-message`, { message });
+    socket?.emit(`send-session-chat-message`, { sessionId: session.id, message });
 }
 
 export function requestRematch() {
@@ -380,7 +384,7 @@ export function requestRematch() {
         return;
     }
 
-    socket?.emit(`request-rematch`, session.id);
+    socket?.emit(`request-rematch`, { sessionId: session.id });
 }
 
 export function cancelRematch() {
@@ -389,7 +393,7 @@ export function cancelRematch() {
         return;
     }
 
-    socket?.emit(`cancel-rematch`, session.id);
+    socket?.emit(`cancel-rematch`, { sessionId: session.id });
 }
 
 if (typeof window !== `undefined`) {
