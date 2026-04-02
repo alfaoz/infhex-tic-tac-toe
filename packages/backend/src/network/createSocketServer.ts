@@ -6,6 +6,10 @@ import {
     DEFAULT_ACCOUNT_PREFERENCES,
     type LobbyInfo,
     type ServerToClientEvents,
+    type SessionClaimWinEvent,
+    type SessionUpdatedEvent,
+    type TournamentNotificationEvent,
+    type TournamentUpdatedEvent,
     zJoinSessionRequest,
     zPlaceCellRequest,
     zSessionChatMessageRequest,
@@ -34,6 +38,9 @@ type Participation = {
 type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const LOBBY_LIST_DEBOUNCE_MS = 1_000;
+function getProfileRoom(profileId: string) {
+    return `profile:${profileId}`;
+}
 
 const kEmptyValue = Symbol();
 class UpdateDebouncer<T> {
@@ -171,6 +178,7 @@ export class SocketServerGateway {
 
     private async handleConnection(socket: ClientSocket) {
         const clientInfo = parseSocketClientInfo(socket);
+        const authenticatedUser = await this.authService.getUserFromSocket(socket);
 
         this.logger.debug({
             event: `socket.connected`,
@@ -190,6 +198,10 @@ export class SocketServerGateway {
 
         /* store the connection */
         this.connections.set(`${clientInfo.deviceId}:${clientInfo.ephemeralClientId}`, socket);
+
+        if (authenticatedUser) {
+            await socket.join(getProfileRoom(authenticatedUser.id));
+        }
 
         /* reclaim a game by the device id */
         {
@@ -227,7 +239,7 @@ export class SocketServerGateway {
                 }
 
                 const session = this.sessionManager.requireSession(request.sessionId);
-                const user = await this.authService.getUserFromSocket(socket);
+                const user = authenticatedUser ?? await this.authService.getUserFromSocket(socket);
                 const preferences = user ? await this.authService.getUserPreferences(user.id) : DEFAULT_ACCOUNT_PREFERENCES;
                 const { participant, role } = await this.sessionManager.joinSession(session, {
                     deviceId: clientInfo.deviceId,
@@ -502,6 +514,22 @@ export class SocketServerGateway {
             participantId: participation.participantId,
             participantRole: participation.participantRole,
         });
+    }
+
+    emitTournamentUpdated(event: TournamentUpdatedEvent) {
+        this.io?.emit(`tournament-updated`, event);
+    }
+
+    emitTournamentNotification(profileId: string, event: TournamentNotificationEvent) {
+        this.io?.to(getProfileRoom(profileId)).emit(`tournament-notification`, event);
+    }
+
+    emitSessionUpdated(event: SessionUpdatedEvent) {
+        this.io?.to(event.sessionId).emit(`session-updated`, event);
+    }
+
+    emitSessionClaimWin(event: SessionClaimWinEvent) {
+        this.io?.to(event.sessionId).emit(`session-claim-win`, event);
     }
 
     private bindSocketHandler<T extends keyof ClientToServerEvents, E = Parameters<ClientToServerEvents[T]>[0]>(

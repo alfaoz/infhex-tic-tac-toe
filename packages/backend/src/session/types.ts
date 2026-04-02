@@ -16,6 +16,7 @@ import {
     type SessionInfo,
     type SessionParticipant,
     type SessionParticipantRole,
+    type SessionTournamentInfo,
     SessionUpdatedEvent,
 } from '@ih3t/shared';
 import { Mutex } from 'async-mutex';
@@ -61,10 +62,13 @@ export type ServerGameSession = {
     startedAt: number | null;
     gameId: string;
     gameState: GameState;
+    finishedAt: number | null;
     finishReason: SessionFinishReason | null;
     winningPlayerId: string | null;
     rematchAcceptedPlayerIds: string[];
     isRatedGame: boolean;
+    reservedPlayerProfileIds: string[];
+    tournament: SessionTournamentInfo | null;
 
     chatNames: Record<SessionChatSenderId, string>;
     chatMessages: SessionChatMessage[];
@@ -83,6 +87,8 @@ export type JoinSessionParams = {
 export type CreateSessionParams = {
     client: RequestClientInfo;
     lobbyOptions: LobbyOptions;
+    reservedPlayerProfileIds?: string[];
+    tournament?: SessionTournamentInfo | null;
 };
 
 export type ParticipantLeftEvent = {
@@ -183,6 +189,10 @@ export function cloneGameBoard(boardState: GameState): GameState {
 export function createGameSession(
     sessionId: string,
     gameOptions: LobbyOptions,
+    options: {
+        reservedPlayerProfileIds?: string[];
+        tournament?: SessionTournamentInfo | null;
+    } = {},
 ): ServerGameSession {
     return {
         id: sessionId,
@@ -199,13 +209,18 @@ export function createGameSession(
 
         gameOptions: cloneGameOptions(gameOptions),
 
-    finishReason: null,
-    winningPlayerId: null,
-    rematchAcceptedPlayerIds: [],
-    isRatedGame: false,
-
-    gameId: ``,
-    gameState: createEmptyGameState(),
+        finishedAt: null,
+        finishReason: null,
+        winningPlayerId: null,
+        rematchAcceptedPlayerIds: [],
+        isRatedGame: false,
+        reservedPlayerProfileIds: [
+            ...(options.reservedPlayerProfileIds ?? []),
+        ],
+        tournament: options.tournament ? { ...options.tournament } : null,
+        
+        gameId: ``,
+        gameState: createEmptyGameState(),
 
         chatNames: {},
         chatMessages: [],
