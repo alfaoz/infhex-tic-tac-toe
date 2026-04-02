@@ -129,6 +129,11 @@ export type ClientGameParticipation = {
     participantRole: SessionParticipantRole
 };
 
+export type SessionWatchSnapshot = {
+    session: SessionInfo
+    gameState: GameState
+};
+
 export function cloneGameOptions(gameOptions: LobbyOptions): LobbyOptions {
     return {
         ...gameOptions,

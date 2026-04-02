@@ -13,6 +13,7 @@ import {
     zJoinSessionRequest,
     zPlaceCellRequest,
     zSessionChatMessageRequest,
+    zWatchSessionRequest,
 } from '@ih3t/shared';
 import { Mutex } from 'async-mutex';
 import type { Logger } from 'pino';
@@ -38,6 +39,8 @@ type Participation = {
 type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const LOBBY_LIST_DEBOUNCE_MS = 1_000;
+const MAX_WATCHED_SESSIONS_PER_SOCKET = 4;
+
 function getProfileRoom(profileId: string) {
     return `profile:${profileId}`;
 }
@@ -97,6 +100,7 @@ class UpdateDebouncer<T> {
 export class SocketServerGateway {
     private readonly logger: Logger;
     private readonly socketParticipations = new Map<string, Participation>();
+    private readonly socketWatchedSessions = new Map<string, Set<string>>();
     private readonly connections = new Map<string, ClientSocket>();
     private lobbyPendingUpdates = new Map<string, UpdateDebouncer<LobbyInfo>>();
 
@@ -220,6 +224,57 @@ export class SocketServerGateway {
             socket.emit(`server-pong`);
         });
 
+        this.bindSocketHandler(socket, `watch-session`, zWatchSessionRequest, async request => {
+            await participationMutex.runExclusive(async () => {
+                const snapshot = this.sessionManager.getSessionSnapshot(request.sessionId);
+                if (!snapshot) {
+                    socket.emit(`session-watch-error`, {
+                        sessionId: request.sessionId,
+                        message: `session unavailable`,
+                    });
+                    return;
+                }
+
+                if (snapshot.session.state.status !== `in-game`) {
+                    socket.emit(`session-watch-error`, {
+                        sessionId: request.sessionId,
+                        message: `session unavailable`,
+                    });
+                    return;
+                }
+
+                const watchedSessions = this.getOrCreateWatchedSessions(socket.id);
+                if (!watchedSessions.has(request.sessionId) && watchedSessions.size >= MAX_WATCHED_SESSIONS_PER_SOCKET) {
+                    socket.emit(`session-watch-error`, {
+                        sessionId: request.sessionId,
+                        message: `You can only watch up to ${MAX_WATCHED_SESSIONS_PER_SOCKET} live matches at once.`,
+                    });
+                    return;
+                }
+
+                watchedSessions.add(request.sessionId);
+                await socket.join(request.sessionId);
+                socket.emit(`session-watch-started`, snapshot);
+            });
+        });
+
+        this.bindSocketHandler(socket, `unwatch-session`, zWatchSessionRequest, async request => {
+            await participationMutex.runExclusive(async () => {
+                const watchedSessions = this.socketWatchedSessions.get(socket.id);
+                if (!watchedSessions?.delete(request.sessionId)) {
+                    return;
+                }
+
+                if (watchedSessions.size === 0) {
+                    this.socketWatchedSessions.delete(socket.id);
+                }
+
+                if (this.socketParticipations.get(socket.id)?.sessionId !== request.sessionId) {
+                    await socket.leave(request.sessionId);
+                }
+            });
+        });
+
         this.bindSocketHandler(socket, `join-session`, zJoinSessionRequest, async request => {
             await participationMutex.runExclusive(async () => {
                 const existingParticipation = this.sessionManager.findParticipationFromSocketId(socket.id);
@@ -282,6 +337,9 @@ export class SocketServerGateway {
 
                 this.socketParticipations.delete(socket.id);
                 void socket.leave(participation.sessionId);
+                if (this.socketWatchedSessions.get(socket.id)?.has(participation.sessionId)) {
+                    void socket.join(participation.sessionId);
+                }
 
                 const session = this.sessionManager.getSession(participation.sessionId);
                 if (session) {
@@ -426,6 +484,7 @@ export class SocketServerGateway {
 
             await participationMutex.runExclusive(() => {
                 this.socketParticipations.delete(socket.id);
+                this.socketWatchedSessions.delete(socket.id);
                 this.sessionManager.handleSocketDisconnect(socket.id);
             });
         });
@@ -481,6 +540,16 @@ export class SocketServerGateway {
         return this.socketParticipations.get(socketId);
     }
 
+    private getOrCreateWatchedSessions(socketId: string): Set<string> {
+        let watchedSessions = this.socketWatchedSessions.get(socketId);
+        if (!watchedSessions) {
+            watchedSessions = new Set<string>();
+            this.socketWatchedSessions.set(socketId, watchedSessions);
+        }
+
+        return watchedSessions;
+    }
+
     private requireParticipation(socketId: string): Participation {
         const participation = this.getParticipation(socketId);
         if (!participation) {
@@ -495,6 +564,7 @@ export class SocketServerGateway {
             updater.cancel();
         }
         this.lobbyPendingUpdates.clear();
+        this.socketWatchedSessions.clear();
 
         this.io?.emit(`error`, `Server shutdown`);
         await this.io?.close();
