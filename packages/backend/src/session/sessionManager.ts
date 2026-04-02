@@ -294,6 +294,7 @@ export class SessionManager {
                         socketId: null,
                     }
                 }
+                session.spectators.push(participation.participant);
                 break;
         }
 

@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import GameOverlayFinishedPlayer from '../components/GameOverlayFinishedPlayer';
 import GameOverlayFinishedSpectator from '../components/GameOverlayFinishedSpectator';
 import GameScreen from '../components/GameScreen';
-import PageMetadata, { DEFAULT_PAGE_TITLE } from '../components/PageMetadata';
+import PageMetadata, { DEFAULT_PAGE_TITLE, PageMetadataProps } from '../components/PageMetadata';
 import WaitingScreen from '../components/WaitingScreen';
 import {
     acceptSessionDraw,
@@ -189,6 +189,51 @@ function ConfirmLeaveSessionModal({ onStay, onLeave }: Readonly<{
     );
 }
 
+function RouteMetadata() {
+    const { sessionId } = useParams<{ sessionId: SessionId }>();
+    const { data: sessionInfo, isLoading: sessionInfoLoading } = useQuerySessionInfo(sessionId ?? null);
+    const localParticipantId = useLiveGameStore(state => state.session?.localParticipantId);
+
+    let metadata: Partial<PageMetadataProps>;
+    if (sessionInfoLoading) {
+        metadata = {
+            title: `Live Session • ${DEFAULT_PAGE_TITLE}`,
+            description: `Join or spectate a live Infinity Hexagonal Tic-Tac-Toe session.`,
+            robots: `noindex, nofollow` as const,
+        }
+    } else if (!sessionInfo) {
+        metadata = {
+            title: `Invite Expired • ${DEFAULT_PAGE_TITLE}`,
+            description: `This live session is no longer active. Open the lobby to host or join another match.`,
+            robots: `noindex, nofollow` as const,
+        }
+    } else if (localParticipantId) {
+        /* Active SPA game */
+        switch (sessionInfo.state.status) {
+            case 'lobby':
+                metadata = { title: `Lobby ${sessionInfo.id} • ${DEFAULT_PAGE_TITLE}` }
+                break
+
+            case 'in-game':
+                if (sessionInfo.players.some(player => player.id === localParticipantId)) {
+                    metadata = { title: `Live Game ${sessionInfo.id} • ${DEFAULT_PAGE_TITLE}` }
+                } else {
+                    metadata = { title: `Spectating Game ${sessionInfo.id} • ${DEFAULT_PAGE_TITLE}` }
+                }
+                break
+
+            case 'finished':
+                metadata = { title: `Finished Game ${sessionInfo.id} • ${DEFAULT_PAGE_TITLE}` }
+                break
+        }
+    } else {
+        metadata = describeSessionInvite(sessionInfo);
+    }
+    return (
+        <PageMetadata {...metadata} />
+    )
+}
+
 const kEmptyGameState = createEmptyGameState();
 function SessionRoute() {
     const { sessionId } = useParams<{ sessionId: SessionId }>();
@@ -198,7 +243,6 @@ function SessionRoute() {
     const shutdown = useQueryServerShutdown().data ?? null;
     const { data: account } = useQueryAccount({ enabled: true });
     const { data: accountPreferences } = useQueryAccountPreferences({ enabled: account?.user !== null });
-    const sessionInfoQuery = useQuerySessionInfo(sessionId ?? null, { enabled: true });
 
     const blockSessionJoinRef = useRef<boolean>(false);
     const autoPlacedOpeningTileGameKeyRef = useRef<string | null>(null);
@@ -209,7 +253,6 @@ function SessionRoute() {
     const connection = useLiveGameStore(state => state.connection);
     const session = useLiveGameStore(state => state.session);
     const pendingSessionJoin = useLiveGameStore(state => state.pendingSessionJoin);
-    const metadataSession = sessionInfoQuery.data ?? null;
 
     const autoPlaceOriginTile = accountPreferences?.preferences.autoPlaceOriginTile ?? false;
     const showTilePieceMarkers = accountPreferences?.preferences.tilePieceMarkers ?? false;
@@ -559,22 +602,7 @@ function SessionRoute() {
 
     return (
         <React.Fragment>
-            <PageMetadata
-                {...(metadataSession
-                    ? describeSessionInvite(metadataSession)
-                    : !sessionInfoQuery.isLoading
-                        ? {
-                            title: `Invite Expired • ${DEFAULT_PAGE_TITLE}`,
-                            description: `This live session is no longer active. Open the lobby to host or join another match.`,
-                            robots: `noindex, nofollow` as const,
-                        }
-                        : {
-                            title: `Live Session • ${DEFAULT_PAGE_TITLE}`,
-                            description: `Join or spectate a live Infinity Hexagonal Tic-Tac-Toe session.`,
-                            robots: `noindex, nofollow` as const,
-                        })}
-            />
-
+            <RouteMetadata />
             {targetScreen}
             {leaveConfirmModal}
         </React.Fragment>
