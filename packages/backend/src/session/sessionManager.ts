@@ -294,7 +294,7 @@ export class SessionManager {
                             id: this.createParticipantId(session),
 
                             profileId,
-                            displayName: params.displayName,
+                            displayName,
 
                             socketId: null,
                         },

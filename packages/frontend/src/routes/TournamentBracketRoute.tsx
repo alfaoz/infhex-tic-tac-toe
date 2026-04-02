@@ -16,6 +16,11 @@ const STATE_COLORS: Record<string, { dot: string; border: string }> = {
 function MatchNode({ match, onSpectate }: { match: TournamentMatch; onSpectate: (sid: string) => void }) {
     const { dot, border } = STATE_COLORS[match.state] ?? STATE_COLORS.pending!;
     const isLive = match.state === `in-progress` && match.sessionId;
+    const handleSpectate = () => {
+        if (isLive) {
+            onSpectate(match.sessionId!);
+        }
+    };
 
     const slot = (s: TournamentMatch[`slots`][number], wins: number, isWinner: boolean, side: `top` | `bottom`) => (
         <div className={`flex items-center gap-2 px-2.5 py-1.5 ${
@@ -42,8 +47,19 @@ function MatchNode({ match, onSpectate }: { match: TournamentMatch; onSpectate: 
     return (
         <div
             className={`w-48 overflow-hidden rounded-lg border transition ${border} ${isLive ? `cursor-pointer` : ``}`}
-            onClick={() => { if (isLive) onSpectate(match.sessionId!); }}
+            onClick={handleSpectate}
+            onKeyDown={(event) => {
+                if (!isLive) {
+                    return;
+                }
+
+                if (event.key === `Enter` || event.key === ` `) {
+                    event.preventDefault();
+                    handleSpectate();
+                }
+            }}
             role={isLive ? `button` : undefined}
+            tabIndex={isLive ? 0 : undefined}
         >
             <div className="flex items-center gap-1.5 bg-slate-950/60 px-2.5 py-1">
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot}`} />

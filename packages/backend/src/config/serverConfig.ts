@@ -18,8 +18,8 @@ export class ServerConfig {
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     readonly port: string | number = process.env.PORT || 3001;
     readonly authSecret = this.requireEnv(`AUTH_SECRET`, `development-auth-secret`);
-    readonly discordClientId = this.requireFirstEnv(`AUTH_DISCORD_ID`, `DISCORD_CLIENT_ID`, `development-discord-client-id`);
-    readonly discordClientSecret = this.requireFirstEnv(`AUTH_DISCORD_SECRET`, `DISCORD_CLIENT_SECRET`, `development-discord-client-secret`);
+    readonly discordClientId = this.requireFirstEnv([`AUTH_DISCORD_ID`, `DISCORD_CLIENT_ID`], `development-discord-client-id`);
+    readonly discordClientSecret = this.requireFirstEnv([`AUTH_DISCORD_SECRET`, `DISCORD_CLIENT_SECRET`], `development-discord-client-secret`);
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     readonly logLevel = process.env.LOG_LEVEL?.trim() || (process.env.NODE_ENV === `production` ? `info` : `debug`);
     readonly prettyLogs = this.parseBoolean(process.env.LOG_PRETTY) ?? process.env.NODE_ENV !== `production`;
@@ -51,9 +51,8 @@ export class ServerConfig {
         return value;
     }
 
-    private requireFirstEnv(...names: string[]): string {
-        const developmentFallback = this.isDevelopment ? names.at(-1) ?? null : null;
-        const envNames = developmentFallback ? names.slice(0, -1) : names;
+    private requireFirstEnv(envNames: readonly string[], developmentFallback?: string): string {
+        const activeDevelopmentFallback = this.isDevelopment ? developmentFallback ?? null : null;
 
         for (const name of envNames) {
             const value = process.env[name]?.trim();
@@ -62,8 +61,8 @@ export class ServerConfig {
             }
         }
 
-        if (developmentFallback) {
-            return developmentFallback;
+        if (activeDevelopmentFallback) {
+            return activeDevelopmentFallback;
         }
 
         throw new Error(`Missing required environment variable ${envNames.join(` or `)}`);

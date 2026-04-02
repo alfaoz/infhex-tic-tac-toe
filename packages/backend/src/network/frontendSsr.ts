@@ -150,7 +150,11 @@ export class FrontendSsrRenderer {
         }
 
         if (path === `/tournaments`) {
-            queryClient.setQueryData(queryKeys.tournaments, await this.dependencies.apiQueryService.getTournaments(req));
+            const pastPage = parsePositiveInteger(requestUrl.searchParams.get(`pastPage`)) ?? 1;
+            queryClient.setQueryData(
+                [...queryKeys.tournaments, `list`, pastPage],
+                await this.dependencies.apiQueryService.getTournaments(req),
+            );
         }
 
         const tournamentMatch = /^\/tournaments\/([^/]+)$/.exec(path);
