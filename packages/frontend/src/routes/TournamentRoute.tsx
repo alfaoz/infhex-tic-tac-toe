@@ -7,6 +7,7 @@ import PageCorpus from '../components/PageCorpus';
 import PageMetadata, { DEFAULT_PAGE_TITLE } from '../components/PageMetadata';
 import TournamentEditorCard, { buildCreateTournamentRequestFromDetail } from '../components/TournamentEditorCard';
 import { useQueryAccount } from '../query/accountClient';
+import { devResolveAll, devResolveCurrentRound, devResolveN, seedTournamentWithDevUsers } from '../query/devAuthClient';
 import {
     addToAccessList,
     addTournamentParticipant,
@@ -1114,6 +1115,8 @@ function TournamentRoute() {
     const [wlResult, setWlResult] = useState<{ matched: string[]; unmatched: string[] } | null>(null);
     const [blText, setBlText] = useState(``);
     const [blResult, setBlResult] = useState<{ matched: string[]; unmatched: string[] } | null>(null);
+    const [devCount, setDevCount] = useState(8);
+    const [devState, setDevState] = useState<`registered` | `checked-in`>(`checked-in`);
 
     const t = tQ.data ?? null;
     const acct = acctQ.data?.user ?? null;
@@ -1876,6 +1879,86 @@ function TournamentRoute() {
                                             className="block w-full rounded-lg border border-rose-300/15 bg-rose-400/6 px-3 py-2 text-left text-[12px] font-medium text-rose-200 transition hover:bg-rose-400/12"
                                         />
                                     ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Dev seeder */}
+                        {import.meta.env.DEV && t.status !== `live` && t.status !== `completed` && t.status !== `cancelled` && (
+                            <div className="border-t border-white/6 pt-3">
+                                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-300/60">
+                                    Dev Seed
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="number" min={1} max={t.maxPlayers} value={devCount}
+                                        onChange={(e) => setDevCount(Number.parseInt(e.target.value, 10) || 1)}
+                                        className="w-16 rounded border border-white/8 bg-slate-950/60 px-2 py-1 text-center text-sm text-white outline-none"
+                                    />
+
+                                    <select
+                                        value={devState} onChange={(e) => setDevState(e.target.value as `registered` | `checked-in`)}
+                                        className="rounded border border-white/8 bg-slate-950/60 px-2 py-1 text-sm text-white outline-none"
+                                    >
+                                        <option value="checked-in">
+                                            Checked In
+                                        </option>
+
+                                        <option value="registered">
+                                            Registered
+                                        </option>
+                                    </select>
+
+                                    <button
+                                        onClick={() => void run(() => seedTournamentWithDevUsers(t.id, { count: Math.max(1, Math.min(devCount, t.maxPlayers)), state: devState }), `Seeded.`)}
+                                        disabled={busy}
+                                        className="rounded bg-emerald-400 px-3 py-1 text-[11px] font-bold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50"
+                                    >
+                                        Seed
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {/* Dev match resolver */}
+                        {import.meta.env.DEV && t.status === `live` && (
+                            <div className="border-t border-white/6 pt-3">
+                                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-300/60">
+                                    Dev Resolve
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => void run(() => devResolveN(t.id, 1), `Resolved 1 match.`)}
+                                        disabled={busy}
+                                        className="rounded bg-amber-400 px-3 py-1 text-[11px] font-bold text-slate-950 transition hover:bg-amber-300 disabled:opacity-50"
+                                    >
+                                        Resolve 1
+                                    </button>
+
+                                    <button
+                                        onClick={() => void run(() => devResolveN(t.id, 5), `Resolved up to 5.`)}
+                                        disabled={busy}
+                                        className="rounded bg-amber-400 px-3 py-1 text-[11px] font-bold text-slate-950 transition hover:bg-amber-300 disabled:opacity-50"
+                                    >
+                                        Resolve 5
+                                    </button>
+
+                                    <button
+                                        onClick={() => void run(() => devResolveCurrentRound(t.id), `Round resolved.`)}
+                                        disabled={busy}
+                                        className="rounded bg-amber-400 px-3 py-1 text-[11px] font-bold text-slate-950 transition hover:bg-amber-300 disabled:opacity-50"
+                                    >
+                                        Resolve Round
+                                    </button>
+
+                                    <button
+                                        onClick={() => void run(() => devResolveAll(t.id), `All resolved.`)}
+                                        disabled={busy}
+                                        className="rounded bg-rose-400 px-3 py-1 text-[11px] font-bold text-slate-950 transition hover:bg-rose-300 disabled:opacity-50"
+                                    >
+                                        Resolve All
+                                    </button>
                                 </div>
                             </div>
                         )}
