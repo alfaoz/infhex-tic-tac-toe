@@ -18,6 +18,7 @@ import SandboxRoute from './routes/SandboxRoute';
 import SessionRoute from './routes/SessionRoute';
 import TournamentBracketRoute from './routes/TournamentBracketRoute';
 import TournamentListRoute from './routes/TournamentListRoute';
+import TournamentMultiviewRoute from './routes/TournamentMultiviewRoute';
 import TournamentRoute from './routes/TournamentRoute';
 import { useRenderMode } from './ssrState';
 
@@ -70,6 +71,7 @@ export function createAppRoutes() {
                     <Route path="/sandbox/:positionId" element={<SandboxRoute />} />
                     <Route path="/session/:sessionId" element={<SessionRoute />} />
                     <Route path="/tournaments/:tournamentId/bracket" element={<TournamentBracketRoute />} />
+                    <Route path="/tournaments/:tournamentId/multiview" element={<TournamentMultiviewRoute />} />
                 </Route>
             </Route>
 

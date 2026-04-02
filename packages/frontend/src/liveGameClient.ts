@@ -15,6 +15,7 @@ import { queryClient } from './query/queryClient';
 import { queryKeys } from './query/queryDefinitions';
 import { buildSessionPath } from './routes/archiveRouteState';
 import { playMatchStartSound } from './soundEffects';
+import { useTournamentMultiviewStore } from './tournamentMultiviewStore';
 import { sortLobbySessions } from './utils/lobby';
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
@@ -282,6 +283,9 @@ export function startLiveGameClient() {
     });
 
     socket.on(`session-updated`, data => {
+        const multiviewStore = useTournamentMultiviewStore.getState();
+        const watchedTile = multiviewStore.tilesBySessionId[data.sessionId] ?? null;
+
         queryClient.setQueryData(
             queryKeys.session(data.sessionId),
             (currentSession: SessionInfo | null | undefined) => currentSession
@@ -293,22 +297,37 @@ export function startLiveGameClient() {
                 : currentSession ?? null,
         );
         useLiveGameStore.getState().handleSessionUpdate({ ...data.session, id: data.sessionId });
+        multiviewStore.handleSessionUpdate(data);
 
         /* When a tournament session finishes, eagerly invalidate tournament queries
          * so the match card updates immediately instead of waiting for reconciliation. */
         if (data.session.state?.status === `finished`) {
             const store = useLiveGameStore.getState();
-            if (store.session?.tournament || data.session.tournament) {
+            if (store.session?.tournament || data.session.tournament || watchedTile?.session?.tournament) {
                 void queryClient.invalidateQueries({ queryKey: queryKeys.tournaments });
             }
         }
     });
 
+    socket.on(`session-watch-started`, data => {
+        queryClient.setQueryData(
+            queryKeys.session(data.session.id),
+            data.session,
+        );
+        useTournamentMultiviewStore.getState().handleWatchStarted(data);
+    });
+
+    socket.on(`session-watch-error`, data => {
+        useTournamentMultiviewStore.getState().handleWatchError(data);
+    });
+
     socket.on(`game-state`, data => {
         useLiveGameStore.getState().handleGameState(data);
+        useTournamentMultiviewStore.getState().handleGameState(data);
     });
     socket.on(`game-cell-place`, data => {
         useLiveGameStore.getState().handleGameCellPlace(data);
+        useTournamentMultiviewStore.getState().handleGameCellPlace(data);
     });
 
     socket.on(`session-chat`, data => useLiveGameStore.getState().handleSessionChatEvent(data));
@@ -355,6 +374,18 @@ export function joinSession(sessionId: SessionId) {
 
     state.startJoiningSession(sessionId);
     socket?.emit(`join-session`, {
+        sessionId,
+    });
+}
+
+export function watchSession(sessionId: string) {
+    socket?.emit(`watch-session`, {
+        sessionId,
+    });
+}
+
+export function unwatchSession(sessionId: string) {
+    socket?.emit(`unwatch-session`, {
         sessionId,
     });
 }
