@@ -1544,6 +1544,10 @@ export class SessionManager {
             throw new SessionError(`Draw agreements are only available during an active game.`);
         }
 
+        if (session.tournament) {
+            throw new SessionError(`Draw agreements are not available in tournament matches.`);
+        }
+
         if (!session.players.some((participant) => participant.id === participantId)) {
             throw new SessionError(`Only active players can manage draw agreements.`);
         }

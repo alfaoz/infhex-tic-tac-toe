@@ -136,7 +136,7 @@ function GameScreenHud({
     let hideSurrenderButton = false;
     let drawActionArea: React.ReactNode = null;
 
-    if (!isSpectator && localPlayerId) {
+    if (!isSpectator && localPlayerId && !tournament) {
         if (requestedByLocalPlayer) {
             drawActionArea = (
                 <button
