@@ -4,6 +4,7 @@ import { randomInt } from 'node:crypto';
 import type {
     BoardCell,
     CreateSessionResponse,
+    FinishedGameTournamentInfo,
     GameState,
     HexCoordinate,
     LobbyInfo,
@@ -17,6 +18,7 @@ import type {
     SessionId,
     SessionInfo,
     SessionState,
+    SessionTournamentInfo,
 } from '@ih3t/shared';
 import { buildPlayerTileConfigMap, DRAW_REQUEST_RETRY_TURNS } from '@ih3t/shared';
 import type { Logger } from 'pino';
@@ -186,7 +188,10 @@ export class SessionManager {
         this.assertNewGameCreationAllowed(`lobby`);
 
         const sessionId = this.createSessionId();
-        const session = createGameSession(sessionId, params.lobbyOptions);
+        const session = createGameSession(sessionId, params.lobbyOptions, {
+            reservedPlayerProfileIds: params.reservedPlayerProfileIds,
+            tournament: params.tournament ?? null,
+        });
 
         this.sessions.set(session.id, session);
 
@@ -234,11 +239,20 @@ export class SessionManager {
         let participation: ServerSessionParticipation;
         switch (session.state) {
             case `lobby`: {
-                if (session.players.length >= MAX_PLAYERS_PER_SESSION) {
+                const hasReservedSeats = session.reservedPlayerProfileIds.length > 0;
+                const canJoinReservedSeat = Boolean(
+                    hasReservedSeats
+                    && profileId
+                    && session.reservedPlayerProfileIds.includes(profileId)
+                    && !session.players.some((player) => player.profileId === profileId),
+                );
+                const shouldJoinAsSpectator = hasReservedSeats && !canJoinReservedSeat;
+
+                if (!shouldJoinAsSpectator && session.players.length >= MAX_PLAYERS_PER_SESSION) {
                     throw new SessionError(`Session is full`);
                 }
 
-                if (profileId && session.players.some((player) => player.profileId === profileId)) {
+                if (!shouldJoinAsSpectator && profileId && session.players.some((player) => player.profileId === profileId)) {
                     /* a player with that profile is already in the lobby */
                     if (session.gameOptions.rated) {
                         throw new SessionError(`You cannot join your own rated lobby as the second player.`);
@@ -259,6 +273,24 @@ export class SessionManager {
                     }
                 }
 
+                if (shouldJoinAsSpectator) {
+                    participation = {
+                        session,
+                        role: `spectator`,
+                        participant: {
+                            id: this.createParticipantId(session),
+
+                            profileId,
+                            displayName: params.displayName,
+
+                            socketId: null,
+                        },
+                    };
+
+                    session.spectators.push(participation.participant);
+                    break;
+                }
+
                 participation = {
                     session,
                     role: `player`,
@@ -266,7 +298,7 @@ export class SessionManager {
                         id: this.createParticipantId(session),
 
                         deviceId: params.deviceId,
-                        profileId: params.profile?.id ?? null,
+                        profileId,
                         displayName,
 
                         rating: playerRating,
@@ -274,10 +306,21 @@ export class SessionManager {
                         ratingAdjusted: null,
 
                         connection: { status: `disconnected`, timestamp: Date.now() },
-                    }
+                    },
                 };
 
                 session.players.push(participation.participant);
+                if (hasReservedSeats && participation.participant.profileId) {
+                    session.players.sort((leftPlayer, rightPlayer) => {
+                        const leftSeat = leftPlayer.profileId
+                            ? session.reservedPlayerProfileIds.indexOf(leftPlayer.profileId)
+                            : Number.MAX_SAFE_INTEGER;
+                        const rightSeat = rightPlayer.profileId
+                            ? session.reservedPlayerProfileIds.indexOf(rightPlayer.profileId)
+                            : Number.MAX_SAFE_INTEGER;
+                        return leftSeat - rightSeat;
+                    });
+                }
                 session.hadPlayers = true;
                 break;
             }
@@ -498,6 +541,10 @@ export class SessionManager {
                 throw new SessionError(`Server shutdown pending. Rematches are unavailable.`);
             }
 
+            if (session.tournament) {
+                throw new SessionError(`Rematches are unavailable for tournament matches.`);
+            }
+
             if (session.state !== `finished`) {
                 throw new SessionError(`Rematch is not available for this match.`);
             }
@@ -529,6 +576,10 @@ export class SessionManager {
 
         const originalSession = this.requireSession(sessionId);
         return originalSession.lock.runExclusive(async () => {
+            if (originalSession.tournament) {
+                throw new SessionError(`Rematches are unavailable for tournament matches.`);
+            }
+
             if (originalSession.state !== `finished`) {
                 throw new SessionError(`Rematch is not available for this match.`);
             }
@@ -729,9 +780,21 @@ export class SessionManager {
             return;
         }
 
-        const connectedPlayers = session.players.filter(spectator => spectator.connection.status !== `disconnected`);
+        const connectedPlayers = session.players.filter(player => player.connection.status !== `disconnected`);
+        const connectedSpectators = session.spectators.filter(spectator => spectator.socketId !== null);
         const sessionAge = Date.now() - session.createdAt;
-        if (connectedPlayers.length === 0 && session.spectators.length === 0 && (session.hadPlayers || sessionAge >= 5_000)) {
+        const isTournamentSessionAwaitingReconciliation = session.tournament !== null
+            && session.state === `finished`
+            && session.finishedAt !== null
+            && Date.now() - session.finishedAt < 30_000;
+        const shouldKeepTournamentSession = session.tournament !== null && session.state !== `finished`;
+        if (
+            !shouldKeepTournamentSession
+            && !isTournamentSessionAwaitingReconciliation
+            && connectedPlayers.length === 0
+            && connectedSpectators.length === 0
+            && (session.hadPlayers || sessionAge >= 5_000)
+        ) {
             this.deleteSession(session, `empty`);
             return;
         }
@@ -843,6 +906,7 @@ export class SessionManager {
 
         const finishedAt = Date.now();
         session.state = `finished`;
+        session.finishedAt = finishedAt;
 
         this.timeControl.freezeActiveTurnState(session, finishedAt);
         session.gameState = this.simulation.getPublicGameState(session.gameState);
@@ -1098,6 +1162,13 @@ export class SessionManager {
 
     getSession(sessionId: string): ServerGameSession | null {
         return this.sessions.get(sessionId) ?? null;
+    }
+
+    updateSessionTournamentInfo(sessionId: string, update: Partial<SessionTournamentInfo>): void {
+        const session = this.sessions.get(sessionId);
+        if (session?.tournament) {
+            Object.assign(session.tournament, update);
+        }
     }
 
     requireSession(sessionId: string): ServerGameSession {
@@ -1370,6 +1441,7 @@ export class SessionManager {
                 displayNames: session.chatNames,
                 messages: session.chatMessages.map(cloneChatMessage),
             },
+            tournament: session.tournament ? { ...session.tournament } : null,
         };
     }
 
@@ -1401,6 +1473,7 @@ export class SessionManager {
             this.buildDatabasePlayers(session),
             this.buildPlayerTiles(session),
             session.gameOptions,
+            this.buildFinishedGameTournamentInfo(session),
         );
         session.gameId = gameId;
         return gameId;
@@ -1464,6 +1537,10 @@ export class SessionManager {
     }
 
     private isRatedGameEnabled(session: ServerGameSession): boolean {
+        if (session.tournament) {
+            return false;
+        }
+
         if (!session.gameOptions.rated) {
             /* not planned to be a rated game */
             return false;
@@ -1481,6 +1558,17 @@ export class SessionManager {
         }
 
         return true;
+    }
+
+    private buildFinishedGameTournamentInfo(session: ServerGameSession): FinishedGameTournamentInfo | null {
+        if (!session.tournament) {
+            return null;
+        }
+
+        return {
+            ...session.tournament,
+            resultType: null,
+        };
     }
 
     // / Update the player rating adjustments. emitSessionUpdated with players must be called manually afterwards
