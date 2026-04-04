@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { TournamentMatch } from '@ih3t/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -81,34 +82,63 @@ const MATCH_W = 192;  // w-48
 const MATCH_H = 72;   // approx height of a match node
 const COL_GAP = 64;   // gap between round columns
 const ROW_GAP = 12;   // vertical gap between matches within a round
+const BRACKET_ZOOM_LEVELS = [0.25, 0.33, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.25, 1.5] as const;
+const DEFAULT_BRACKET_ZOOM_INDEX = BRACKET_ZOOM_LEVELS.indexOf(1);
 
-function getMatchY(index: number, count: number, totalHeight: number): number {
-    if (count <= 1) return totalHeight / 2 - MATCH_H / 2;
-    const usable = totalHeight - MATCH_H;
+function getMatchY(index: number, count: number, totalHeight: number, matchHeight: number): number {
+    if (count <= 1) return totalHeight / 2 - matchHeight / 2;
+    const usable = totalHeight - matchHeight;
     return (usable / (count - 1)) * index;
 }
 
-function BracketConnectors({ rounds, totalHeight }: {
+function ScaledMatchNode({
+    match,
+    onSpectate,
+    scale,
+}: {
+    match: TournamentMatch
+    onSpectate: (sid: string) => void
+    scale: number
+}) {
+    return (
+        <div className="relative shrink-0" style={{ width: MATCH_W * scale, height: MATCH_H * scale }}>
+            <div className="origin-top-left" style={{ width: MATCH_W, transform: `scale(${scale})` }}>
+                <MatchNode match={match} onSpectate={onSpectate} />
+            </div>
+        </div>
+    );
+}
+
+function BracketConnectors({
+    rounds,
+    totalHeight,
+    matchWidth,
+    matchHeight,
+    columnGap,
+}: {
     rounds: { round: number; matches: TournamentMatch[] }[]
     totalHeight: number
+    matchWidth: number
+    matchHeight: number
+    columnGap: number
 }) {
     const paths: React.ReactNode[] = [];
 
     for (let i = 0; i < rounds.length - 1; i++) {
         const curr = rounds[i]!;
         const next = rounds[i + 1]!;
-        const x1 = i * (MATCH_W + COL_GAP) + MATCH_W;
-        const x2 = (i + 1) * (MATCH_W + COL_GAP);
+        const x1 = i * (matchWidth + columnGap) + matchWidth;
+        const x2 = (i + 1) * (matchWidth + columnGap);
         const midX = (x1 + x2) / 2;
 
         for (let j = 0; j < next.matches.length; j++) {
-            const targetY = getMatchY(j, next.matches.length, totalHeight) + MATCH_H / 2;
+            const targetY = getMatchY(j, next.matches.length, totalHeight, matchHeight) + matchHeight / 2;
 
             // Each next match is fed by 2 matches from current round (standard bracket)
             const sourceIndices = [j * 2, j * 2 + 1];
             for (const si of sourceIndices) {
                 if (si >= curr.matches.length) continue;
-                const sourceY = getMatchY(si, curr.matches.length, totalHeight) + MATCH_H / 2;
+                const sourceY = getMatchY(si, curr.matches.length, totalHeight, matchHeight) + matchHeight / 2;
 
                 paths.push(
                     <path
@@ -126,7 +156,7 @@ function BracketConnectors({ rounds, totalHeight }: {
     return (
         <svg
             className="pointer-events-none absolute inset-0"
-            width={rounds.length * (MATCH_W + COL_GAP) - COL_GAP}
+            width={rounds.length * (matchWidth + columnGap) - columnGap}
             height={totalHeight}
         >
             {paths}
@@ -136,30 +166,41 @@ function BracketConnectors({ rounds, totalHeight }: {
 
 /* ── Bracket section with connectors ───────────────── */
 
-function BracketSection({ label, rounds, onSpectate }: {
+function BracketSection({ label, rounds, onSpectate, scale }: {
     label: string
     rounds: { round: number; matches: TournamentMatch[] }[]
     onSpectate: (sid: string) => void
+    scale: number
 }) {
     if (rounds.length === 0) return null;
+    const matchWidth = MATCH_W * scale;
+    const matchHeight = MATCH_H * scale;
+    const columnGap = COL_GAP * scale;
+    const rowGap = ROW_GAP * scale;
 
     const maxMatchesInRound = Math.max(...rounds.map((r) => r.matches.length));
-    const totalHeight = Math.max(maxMatchesInRound * (MATCH_H + ROW_GAP) - ROW_GAP, MATCH_H);
-    const totalWidth = rounds.length * (MATCH_W + COL_GAP) - COL_GAP;
+    const totalHeight = Math.max(maxMatchesInRound * (matchHeight + rowGap) - rowGap, matchHeight);
+    const totalWidth = rounds.length * (matchWidth + columnGap) - columnGap;
 
     return (
         <div className="mb-8">
             <div className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">{label}</div>
             <div className="overflow-x-auto pb-4">
                 <div className="relative" style={{ width: totalWidth, height: totalHeight }}>
-                    <BracketConnectors rounds={rounds} totalHeight={totalHeight} />
+                    <BracketConnectors
+                        rounds={rounds}
+                        totalHeight={totalHeight}
+                        matchWidth={matchWidth}
+                        matchHeight={matchHeight}
+                        columnGap={columnGap}
+                    />
                     {rounds.map((r, colIdx) => (
                         <div
                             key={r.round}
                             className="absolute top-0 flex flex-col"
                             style={{
-                                left: colIdx * (MATCH_W + COL_GAP),
-                                width: MATCH_W,
+                                left: colIdx * (matchWidth + columnGap),
+                                width: matchWidth,
                                 height: totalHeight,
                                 justifyContent: `space-around`,
                             }}
@@ -172,10 +213,10 @@ function BracketSection({ label, rounds, onSpectate }: {
                                     key={m.id}
                                     style={{
                                         position: `absolute`,
-                                        top: getMatchY(idx, r.matches.length, totalHeight),
+                                        top: getMatchY(idx, r.matches.length, totalHeight, matchHeight),
                                     }}
                                 >
-                                    <MatchNode match={m} onSpectate={onSpectate} />
+                                    <ScaledMatchNode match={m} onSpectate={onSpectate} scale={scale} />
                                 </div>
                             ))}
                         </div>
@@ -188,8 +229,17 @@ function BracketSection({ label, rounds, onSpectate }: {
 
 /* ── Swiss view ────────────────────────────────────── */
 
-function SwissView({ matches, onSpectate }: { matches: TournamentMatch[]; onSpectate: (sid: string) => void }) {
+function SwissView({
+    matches,
+    onSpectate,
+    scale,
+}: {
+    matches: TournamentMatch[]
+    onSpectate: (sid: string) => void
+    scale: number
+}) {
     const rounds = new Map<number, TournamentMatch[]>();
+    const gap = 12 * scale;
     for (const m of matches) {
         const arr = rounds.get(m.round) ?? [];
         arr.push(m);
@@ -201,9 +251,9 @@ function SwissView({ matches, onSpectate }: { matches: TournamentMatch[]; onSpec
             {Array.from(rounds.entries()).sort(([a], [b]) => a - b).map(([round, rMatches]) => (
                 <div key={round}>
                     <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Round {round}</div>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap" style={{ gap }}>
                         {rMatches.sort((a, b) => a.order - b.order).map((m) => (
-                            <MatchNode key={m.id} match={m} onSpectate={onSpectate} />
+                            <ScaledMatchNode key={m.id} match={m} onSpectate={onSpectate} scale={scale} />
                         ))}
                     </div>
                 </div>
@@ -214,7 +264,15 @@ function SwissView({ matches, onSpectate }: { matches: TournamentMatch[]; onSpec
 
 /* ── Double Elimination view ───────────────────────── */
 
-function DoubleElimView({ matches, onSpectate }: { matches: TournamentMatch[]; onSpectate: (sid: string) => void }) {
+function DoubleElimView({
+    matches,
+    onSpectate,
+    scale,
+}: {
+    matches: TournamentMatch[]
+    onSpectate: (sid: string) => void
+    scale: number
+}) {
     const winners = new Map<number, TournamentMatch[]>();
     const losers = new Map<number, TournamentMatch[]>();
     const grandFinal: TournamentMatch[] = [];
@@ -247,9 +305,9 @@ function DoubleElimView({ matches, onSpectate }: { matches: TournamentMatch[]; o
 
     return (
         <div className="space-y-2">
-            <BracketSection label="Winners Bracket" rounds={toRounds(winners)} onSpectate={onSpectate} />
-            <BracketSection label="Losers Bracket" rounds={toRounds(losers)} onSpectate={onSpectate} />
-            {gfRounds.length > 0 && <BracketSection label="Grand Final" rounds={gfRounds} onSpectate={onSpectate} />}
+            <BracketSection label="Winners Bracket" rounds={toRounds(winners)} onSpectate={onSpectate} scale={scale} />
+            <BracketSection label="Losers Bracket" rounds={toRounds(losers)} onSpectate={onSpectate} scale={scale} />
+            {gfRounds.length > 0 && <BracketSection label="Grand Final" rounds={gfRounds} onSpectate={onSpectate} scale={scale} />}
         </div>
     );
 }
@@ -261,6 +319,8 @@ function TournamentBracketRoute() {
     const nav = useNavigate();
     const tQ = useQueryTournament(tournamentId ?? null, { enabled: true });
     const t = tQ.data ?? null;
+    const [zoomIndex, setZoomIndex] = useState(DEFAULT_BRACKET_ZOOM_INDEX);
+    const scale = BRACKET_ZOOM_LEVELS[zoomIndex] ?? 1;
 
     const handleSpectate = (sessionId: string) => void nav(`/session/${sessionId}`);
 
@@ -270,7 +330,7 @@ function TournamentBracketRoute() {
                 title={t ? `${t.name} Bracket • ${DEFAULT_PAGE_TITLE}` : `Bracket • ${DEFAULT_PAGE_TITLE}`}
                 description="Live tournament bracket visualization." />
 
-            <div className="flex min-h-dvh flex-col text-white">
+            <div className="flex min-h-0 flex-1 flex-col text-white">
                 {/* Top bar */}
                 <div className="sticky top-12 z-30 border-b border-white/6 bg-slate-950/90 backdrop-blur-md">
                     <div className="mx-auto flex max-w-[2000px] items-center gap-4 px-4 py-2.5 sm:px-6">
@@ -293,6 +353,39 @@ function TournamentBracketRoute() {
                             </div>
                         )}
 
+                        <div className="flex items-center gap-2">
+                            <span className="hidden text-[10px] font-medium text-slate-500 sm:inline">
+                                {Math.round(scale * 100)}%
+                            </span>
+
+                            <button
+                                type="button"
+                                onClick={() => setZoomIndex((current) => Math.max(current - 1, 0))}
+                                disabled={zoomIndex <= 0}
+                                className="rounded-md bg-white/6 px-2.5 py-1 text-[10px] font-medium text-slate-400 transition enabled:hover:bg-white/10 enabled:hover:text-white disabled:cursor-default disabled:opacity-50"
+                            >
+                                -
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setZoomIndex((current) => Math.min(current + 1, BRACKET_ZOOM_LEVELS.length - 1))}
+                                disabled={zoomIndex >= BRACKET_ZOOM_LEVELS.length - 1}
+                                className="rounded-md bg-white/6 px-2.5 py-1 text-[10px] font-medium text-slate-400 transition enabled:hover:bg-white/10 enabled:hover:text-white disabled:cursor-default disabled:opacity-50"
+                            >
+                                +
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setZoomIndex(DEFAULT_BRACKET_ZOOM_INDEX)}
+                                disabled={scale === 1}
+                                className="rounded-md bg-white/6 px-2.5 py-1 text-[10px] font-medium text-slate-400 transition enabled:hover:bg-white/10 enabled:hover:text-white disabled:cursor-default disabled:opacity-50"
+                            >
+                                Reset
+                            </button>
+                        </div>
+
                         <button onClick={() => void tQ.refetch()}
                             className="rounded-md bg-white/6 px-2.5 py-1 text-[10px] font-medium text-slate-400 transition hover:bg-white/10 hover:text-white">
                             Refresh
@@ -301,7 +394,7 @@ function TournamentBracketRoute() {
                 </div>
 
                 {/* Bracket content */}
-                <div className="flex-1 overflow-x-auto px-4 py-6 sm:px-6">
+                <div className="min-h-0 flex-1 overflow-x-auto px-4 py-6 sm:px-6">
                     <div className="mx-auto max-w-[2000px]">
                         {!t ? (
                             <div className="py-20 text-center text-sm text-slate-600">Loading bracket...</div>
@@ -310,9 +403,9 @@ function TournamentBracketRoute() {
                                 Bracket will appear when the tournament goes live.
                             </div>
                         ) : t.format === `swiss` ? (
-                            <SwissView matches={t.matches} onSpectate={handleSpectate} />
+                            <SwissView matches={t.matches} onSpectate={handleSpectate} scale={scale} />
                         ) : (
-                            <DoubleElimView matches={t.matches} onSpectate={handleSpectate} />
+                            <DoubleElimView matches={t.matches} onSpectate={handleSpectate} scale={scale} />
                         )}
                     </div>
                 </div>
