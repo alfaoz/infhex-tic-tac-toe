@@ -40,7 +40,7 @@ test.describe(`Tournament multiview`, () => {
         const players = createPlayers(sessionId);
         const gameState = status === `unavailable` || status === `error` || status === `loading`
             ? null
-            : createStartedGameState(players.map((player) => player.id));
+            : createStartedGameState(players.map((player) => player.id), players[0]?.id ?? null);
 
         if (gameState) {
             gameState.cells = [
