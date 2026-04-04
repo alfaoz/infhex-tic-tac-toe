@@ -36,6 +36,7 @@ type TournamentFormState = {
     grandFinalBestOf: string
     grandFinalResetEnabled: boolean
     matchJoinTimeoutMinutes: string
+    matchExtensionMinutes: string
     lateRegistrationEnabled: boolean
     thirdPlaceMatchEnabled: boolean
     roundDelayMinutes: string
@@ -129,6 +130,7 @@ export function buildCreateTournamentRequestFromDetail(tournament: TournamentDet
         timeControl: { ...tournament.timeControl },
         seriesSettings: { ...tournament.seriesSettings },
         matchJoinTimeoutMinutes: tournament.matchJoinTimeoutMinutes,
+        matchExtensionMinutes: tournament.matchExtensionMinutes,
         lateRegistrationEnabled: tournament.lateRegistrationEnabled,
         thirdPlaceMatchEnabled: tournament.thirdPlaceMatchEnabled,
         roundDelayMinutes: tournament.roundDelayMinutes,
@@ -189,6 +191,7 @@ function init(r: CreateTournamentRequest): TournamentFormState {
         grandFinalBestOf: String(r.seriesSettings.grandFinalBestOf),
         grandFinalResetEnabled: r.seriesSettings.grandFinalResetEnabled,
         matchJoinTimeoutMinutes: String(r.matchJoinTimeoutMinutes ?? 0),
+        matchExtensionMinutes: String(r.matchExtensionMinutes ?? r.matchJoinTimeoutMinutes ?? 0),
         lateRegistrationEnabled: r.lateRegistrationEnabled ?? false,
         thirdPlaceMatchEnabled: r.thirdPlaceMatchEnabled ?? false,
         roundDelayMinutes: String(r.roundDelayMinutes ?? 0),
@@ -287,6 +290,7 @@ function TournamentEditorCard({
             swissRoundCount: sr, timeControl: tc,
             seriesSettings: { earlyRoundsBestOf: bo(f.earlyRoundsBestOf), finalsBestOf: bo(f.finalsBestOf), grandFinalBestOf: bo(f.grandFinalBestOf), grandFinalResetEnabled: f.grandFinalResetEnabled },
             matchJoinTimeoutMinutes: Math.max(0, Math.min(30, Number.parseInt(f.matchJoinTimeoutMinutes, 10) || 0)),
+            matchExtensionMinutes: Math.max(0, Math.min(30, Number.parseInt(f.matchExtensionMinutes, 10) || 0)),
             lateRegistrationEnabled: f.lateRegistrationEnabled,
             thirdPlaceMatchEnabled: f.format === `single-elimination` ? f.thirdPlaceMatchEnabled : false,
             roundDelayMinutes: Math.max(0, Math.min(60, Number.parseInt(f.roundDelayMinutes, 10) || 0)),
@@ -434,7 +438,16 @@ function TournamentEditorCard({
                     <Input type="number" min={0} max={30} value={f.matchJoinTimeoutMinutes} onChange={(e) => set(`matchJoinTimeoutMinutes`, e.target.value)} className="w-14 text-center" />
                     <span className="text-[10px] text-slate-500">{Number(f.matchJoinTimeoutMinutes) === 0 ? `(no limit)` : `min`}</span>
                 </Row>
-                <span className="text-slate-600">|</span>
+
+                {Number(f.matchJoinTimeoutMinutes) > 0 && (
+                    <>
+                        <Row label="Extension" inline>
+                            <Input type="number" min={0} max={30} value={f.matchExtensionMinutes} onChange={(e) => set(`matchExtensionMinutes`, e.target.value)} className="w-14 text-center" />
+                            <span className="text-[10px] text-slate-500">{Number(f.matchExtensionMinutes) === 0 ? `(none)` : `min`}</span>
+                        </Row>
+                        <span className="text-slate-600">|</span>
+                    </>
+                )}
 
                 <label className="flex cursor-pointer items-center gap-1.5">
                     <input type="checkbox" checked={f.lateRegistrationEnabled} onChange={(e) => set(`lateRegistrationEnabled`, e.target.checked)} className="accent-sky-400" />

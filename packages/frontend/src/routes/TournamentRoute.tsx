@@ -866,9 +866,9 @@ function useCountdown(deadlineMs: number | null) {
 
 /* ── Match card ─────────────────────────────────────── */
 
-function MatchCard({ match, canManage, viewerProfileId, timeoutAt, timeoutMinutes, pendingExtension, claimWinExpiresAt, onOpen, onWalkover, onReopen, onRequestExtension, onResolveExtension }: {
+function MatchCard({ match, canManage, viewerProfileId, timeoutAt, extensionMinutes, pendingExtension, claimWinExpiresAt, onOpen, onWalkover, onReopen, onRequestExtension, onResolveExtension }: {
     match: TournamentMatch; canManage: boolean; viewerProfileId: string | null
-    timeoutAt: number | null; timeoutMinutes: number; pendingExtension: TournamentExtensionRequest | null; claimWinExpiresAt: number | null
+    timeoutAt: number | null; extensionMinutes: number; pendingExtension: TournamentExtensionRequest | null; claimWinExpiresAt: number | null
     onOpen: (sid: string) => void; onWalkover: (mid: string, pid: string) => void; onReopen: (mid: string) => void
     onRequestExtension: (mid: string) => void; onResolveExtension: (eid: string, approve: boolean) => void
 }) {
@@ -971,7 +971,7 @@ function MatchCard({ match, canManage, viewerProfileId, timeoutAt, timeoutMinute
                             onClick={() => onRequestExtension(match.id)}
                             className="rounded bg-amber-300/15 px-2 py-0.5 text-[9px] font-semibold text-amber-200 transition hover:bg-amber-300/25"
                         >
-                            Request Extension (+{timeoutMinutes} min)
+                            Request Extension (+{extensionMinutes} min)
                         </button>
                     )}
                 </div>
@@ -1040,14 +1040,14 @@ function MatchCard({ match, canManage, viewerProfileId, timeoutAt, timeoutMinute
                         </span>
 
                         {isParticipant && (
-                            <button
-                                onClick={() => onRequestExtension(match.id)}
-                                className="rounded bg-amber-300/20 px-2 py-0.5 text-[9px] font-semibold text-amber-100 transition hover:bg-amber-300/30"
-                            >
-                                Request Extension (+{timeoutMinutes} min)
-                            </button>
-                        )}
-                    </div>
+                        <button
+                            onClick={() => onRequestExtension(match.id)}
+                            className="rounded bg-amber-300/20 px-2 py-0.5 text-[9px] font-semibold text-amber-100 transition hover:bg-amber-300/30"
+                        >
+                            Request Extension (+{extensionMinutes} min)
+                        </button>
+                    )}
+                </div>
                 </div>
             )}
 
@@ -1441,7 +1441,7 @@ function TournamentRoute() {
                                                             key={m.id} match={m} canManage={t.viewer.canManage}
                                                             viewerProfileId={acct?.id ?? null}
                                                             timeoutAt={t.matchJoinTimeoutMinutes > 0 && m.state === `in-progress` && m.startedAt !== null ? m.startedAt + t.matchJoinTimeoutMinutes * 60_000 : null}
-                                                            timeoutMinutes={t.matchJoinTimeoutMinutes}
+                                                            extensionMinutes={t.matchExtensionMinutes}
                                                             pendingExtension={t.extensionRequests.find((r) => r.matchId === m.id && r.status === `pending`) ?? null}
                                                             claimWinExpiresAt={null}
                                                             onOpen={(sid) => void nav(`/session/${sid}`)}

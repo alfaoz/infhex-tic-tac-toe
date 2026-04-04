@@ -56,6 +56,10 @@ const zStoredTournament = z.object({
         .min(0)
         .max(30)
         .default(5),
+    matchExtensionMinutes: z.number().int()
+        .min(0)
+        .max(30)
+        .optional(),
     lateRegistrationEnabled: z.boolean().default(false),
     thirdPlaceMatchEnabled: z.boolean().default(false),
     roundDelayMinutes: z.number().int()

@@ -99,6 +99,7 @@ function createTournament(overrides: Partial<TournamentRecord> = {}): Tournament
             grandFinalResetEnabled: false,
         },
         matchJoinTimeoutMinutes: overrides.matchJoinTimeoutMinutes ?? 5,
+        matchExtensionMinutes: overrides.matchExtensionMinutes ?? overrides.matchJoinTimeoutMinutes ?? 5,
         lateRegistrationEnabled: overrides.lateRegistrationEnabled ?? false,
         thirdPlaceMatchEnabled: overrides.thirdPlaceMatchEnabled ?? false,
         roundDelayMinutes: overrides.roundDelayMinutes ?? 0,

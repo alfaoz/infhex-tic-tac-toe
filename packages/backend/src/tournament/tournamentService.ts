@@ -310,6 +310,10 @@ function buildViewerState(tournament: TournamentRecord, currentUser: AccountUser
     };
 }
 
+function getMatchExtensionMinutes(tournament: TournamentRecord): number {
+    return tournament.matchExtensionMinutes ?? tournament.matchJoinTimeoutMinutes;
+}
+
 function getTournamentStandings(tournament: TournamentRecord): TournamentStanding[] {
     if (tournament.format === `swiss`) {
         return calculateSwissStandings(
@@ -465,6 +469,7 @@ function toSummary(tournament: TournamentRecord): TournamentSummary {
         timeControl: { ...tournament.timeControl },
         seriesSettings: { ...tournament.seriesSettings },
         matchJoinTimeoutMinutes: tournament.matchJoinTimeoutMinutes,
+        matchExtensionMinutes: getMatchExtensionMinutes(tournament),
         lateRegistrationEnabled: tournament.lateRegistrationEnabled,
         thirdPlaceMatchEnabled: tournament.thirdPlaceMatchEnabled,
         roundDelayMinutes: tournament.roundDelayMinutes,
@@ -670,6 +675,12 @@ export class TournamentService {
 
             if (update.matchJoinTimeoutMinutes !== undefined) {
                 tournament.matchJoinTimeoutMinutes = update.matchJoinTimeoutMinutes ?? tournament.matchJoinTimeoutMinutes;
+            }
+
+            if (update.matchExtensionMinutes !== undefined) {
+                tournament.matchExtensionMinutes = update.matchExtensionMinutes
+                    ?? tournament.matchExtensionMinutes
+                    ?? tournament.matchJoinTimeoutMinutes;
             }
 
             if (update.lateRegistrationEnabled !== undefined) {
@@ -1288,6 +1299,7 @@ export class TournamentService {
             timeControl: { ...request.timeControl },
             seriesSettings: { ...request.seriesSettings },
             matchJoinTimeoutMinutes: request.matchJoinTimeoutMinutes ?? 5,
+            matchExtensionMinutes: request.matchExtensionMinutes ?? request.matchJoinTimeoutMinutes ?? 5,
             lateRegistrationEnabled: request.lateRegistrationEnabled ?? false,
             thirdPlaceMatchEnabled: request.thirdPlaceMatchEnabled ?? false,
             roundDelayMinutes: request.roundDelayMinutes ?? 0,
@@ -2265,6 +2277,7 @@ export class TournamentService {
             leftWins: match.leftWins,
             rightWins: match.rightWins,
             matchJoinTimeoutMs: tournament.matchJoinTimeoutMinutes * 60_000,
+            matchExtensionMs: getMatchExtensionMinutes(tournament) * 60_000,
             matchStartedAt: match.startedAt ?? Date.now(),
             leftDisplayName: match.slots[0].displayName,
             rightDisplayName: match.slots[1].displayName,
@@ -2530,6 +2543,7 @@ export class TournamentService {
 
         const now = Date.now();
         const timeoutMs = tournament.matchJoinTimeoutMinutes * 60_000;
+        const extensionMs = getMatchExtensionMinutes(tournament) * 60_000;
         let changed = false;
 
         for (const match of tournament.matches) {
@@ -2576,7 +2590,7 @@ export class TournamentService {
 
             // Check if there's a pending or approved extension for this match
             const hasActiveExtension = tournament.extensionRequests.some((r) =>
-                r.matchId === match.id && (r.status === `pending` || (r.status === `approved` && now - r.resolvedAt! < timeoutMs)));
+                r.matchId === match.id && (r.status === `pending` || (r.status === `approved` && now - r.resolvedAt! < extensionMs)));
             if (hasActiveExtension) {
                 continue;
             }
@@ -2643,8 +2657,9 @@ export class TournamentService {
 
             // Check the join timeout has actually expired
             const timeoutMs = tournament.matchJoinTimeoutMinutes * 60_000;
+            const extensionMs = getMatchExtensionMinutes(tournament) * 60_000;
             const hasActiveExtension = tournament.extensionRequests.some((r) =>
-                r.matchId === matchId && (r.status === `approved` && Date.now() - r.resolvedAt! < timeoutMs));
+                r.matchId === matchId && (r.status === `approved` && Date.now() - r.resolvedAt! < extensionMs));
             const effectiveStartedAt = hasActiveExtension
                 ? tournament.extensionRequests
                     .filter((r) => r.matchId === matchId && r.status === `approved`)
@@ -2910,7 +2925,8 @@ export class TournamentService {
             extension.resolvedAt = Date.now();
 
             const timeoutMs = tournament.matchJoinTimeoutMinutes * 60_000;
-            const timeoutMinutes = tournament.matchJoinTimeoutMinutes;
+            const extensionMs = getMatchExtensionMinutes(tournament) * 60_000;
+            const extensionMinutes = getMatchExtensionMinutes(tournament);
 
             if (approve) {
                 // Add time on top of the current deadline, don't restart
@@ -2918,8 +2934,8 @@ export class TournamentService {
                 if (match && match.startedAt) {
                     const now = Date.now();
                     const oldDeadline = match.startedAt + timeoutMs;
-                    // New startedAt so that new deadline = max(now, oldDeadline) + timeoutMs
-                    match.startedAt = Math.max(now, oldDeadline);
+                    // New startedAt so that new deadline = max(now, oldDeadline) + extensionMs
+                    match.startedAt = Math.max(now, oldDeadline) + extensionMs - timeoutMs;
 
                     // Sync the session's tournament info so the waiting player sees the updated timer
                     if (match.sessionId) {
@@ -2944,7 +2960,7 @@ export class TournamentService {
                 user,
                 `extension-resolved`,
                 approve
-                    ? `Approved time extension for ${extension.requestedByDisplayName} (+${timeoutMinutes} min).`
+                    ? `Approved time extension for ${extension.requestedByDisplayName} (+${extensionMinutes} min).`
                     : `Denied time extension for ${extension.requestedByDisplayName}.`,
             ));
 
@@ -2953,7 +2969,7 @@ export class TournamentService {
                 tournamentId: tournament.id,
                 kind: `extension-resolved`,
                 message: approve
-                    ? `Your extension request in ${tournament.name} was approved (+${timeoutMinutes} min).`
+                    ? `Your extension request in ${tournament.name} was approved (+${extensionMinutes} min).`
                     : `Your extension request in ${tournament.name} was denied.`,
             } satisfies TournamentNotificationEvent);
 

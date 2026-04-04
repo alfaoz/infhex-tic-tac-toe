@@ -65,7 +65,7 @@ function TournamentTimerSection({
     const claimRemaining = useCountdown(claimWinState?.expiresAt ?? null);
     const [isClaimPending, setIsClaimPending] = useState(false);
     const [isExtensionPending, setIsExtensionPending] = useState(false);
-    const extensionMinutes = Math.round(tournament.matchJoinTimeoutMs / 60_000);
+    const extensionMinutes = Math.round(tournament.matchExtensionMs / 60_000);
 
     const isTimedOut = hasTimeout && joinRemaining !== null && joinRemaining <= 0;
     const hasActiveClaim = claimWinState !== null;

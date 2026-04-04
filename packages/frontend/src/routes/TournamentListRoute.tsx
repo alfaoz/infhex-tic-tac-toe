@@ -323,6 +323,7 @@ function TournamentListRoute() {
                 timeControl: { mode: `turn`, turnTimeMs: 45_000 },
                 seriesSettings: { earlyRoundsBestOf: 1, finalsBestOf: 3, grandFinalBestOf: 5, grandFinalResetEnabled: true },
                 matchJoinTimeoutMinutes: 5,
+                matchExtensionMinutes: 5,
             };
             const t = await createTournament(request);
             toast.info(`Created. Seeding 256 players...`, { toastId: `quick-create` });

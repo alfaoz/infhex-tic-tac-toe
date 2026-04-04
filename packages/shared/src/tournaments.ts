@@ -318,6 +318,9 @@ export const zTournamentSummary = z.object({
     matchJoinTimeoutMinutes: z.number().int()
         .min(0)
         .max(30),
+    matchExtensionMinutes: z.number().int()
+        .min(0)
+        .max(30),
     lateRegistrationEnabled: z.boolean(),
     thirdPlaceMatchEnabled: z.boolean(),
     roundDelayMinutes: z.number().int()
@@ -443,6 +446,10 @@ export const zCreateTournamentRequest = z.object({
         .min(0)
         .max(30)
         .optional(),
+    matchExtensionMinutes: z.number().int()
+        .min(0)
+        .max(30)
+        .optional(),
     lateRegistrationEnabled: z.boolean().optional(),
     thirdPlaceMatchEnabled: z.boolean().optional(),
     roundDelayMinutes: z.number().int()
@@ -484,6 +491,11 @@ export const zUpdateTournamentRequest = z.object({
     timeControl: zGameTimeControl.optional(),
     seriesSettings: zTournamentSeriesSettings.optional(),
     matchJoinTimeoutMinutes: z.number().int()
+        .min(0)
+        .max(30)
+        .nullable()
+        .optional(),
+    matchExtensionMinutes: z.number().int()
         .min(0)
         .max(30)
         .nullable()
@@ -548,6 +560,8 @@ export const zSessionTournamentInfo = z.object({
     rightWins: z.number().int()
         .nonnegative(),
     matchJoinTimeoutMs: z.number().int()
+        .nonnegative(),
+    matchExtensionMs: z.number().int()
         .nonnegative(),
     matchStartedAt: zTimestamp,
     leftDisplayName: z.string().nullable(),
