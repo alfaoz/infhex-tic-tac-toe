@@ -147,7 +147,7 @@ export class DevSupportService {
             matchJoinTimeoutMinutes: 5,
         };
 
-        const createdTournament = await this.tournamentService.createCommunityTournament(actor, request);
+        const createdTournament = await this.tournamentService.createTournament(actor, request);
         await this.seedTournament(createdTournament.id, actor, {
             count: kQuickSealBotTournamentEntrants,
             state: `checked-in`,

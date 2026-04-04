@@ -433,7 +433,7 @@ function toSummary(tournament: TournamentRecord): TournamentSummary {
         id: tournament.id,
         name: tournament.name,
         description: tournament.description,
-        kind: tournament.kind,
+        kind: `community`,
         format: tournament.format,
         visibility: tournament.visibility,
         status: tournament.status,
@@ -598,7 +598,7 @@ export class TournamentService {
         return toDetail(tournament, currentUser, profileMap);
     }
 
-    async createCommunityTournament(user: AccountUserProfile, request: CreateTournamentRequest): Promise<TournamentDetail> {
+    async createTournament(user: AccountUserProfile, request: CreateTournamentRequest): Promise<TournamentDetail> {
         if (user.role !== `admin`) {
             const activeCount = await this.tournamentRepository.countActiveTournamentsForUser(user.id);
             if (activeCount >= 2) {
@@ -606,23 +606,11 @@ export class TournamentService {
             }
         }
 
-        const tournament = this.buildTournamentRecord(`community`, user, request);
+        const tournament = this.buildTournamentRecord(user, request);
         tournament.whitelist = await this.resolveAccessEntries(request.whitelist ?? []);
         tournament.blacklist = await this.resolveAccessEntries(request.blacklist ?? []);
         await this.tournamentRepository.createTournament(tournament);
         this.broadcastTournamentUpdate(tournament);
-        return toDetail(tournament, user);
-    }
-
-    async createOfficialTournament(user: AccountUserProfile, request: CreateTournamentRequest): Promise<TournamentDetail> {
-        if (user.role !== `admin`) {
-            throw new SessionError(`Admin access is required to create official tournaments.`);
-        }
-
-        const tournament = this.buildTournamentRecord(`official`, user, request);
-        tournament.whitelist = await this.resolveAccessEntries(request.whitelist ?? []);
-        tournament.blacklist = await this.resolveAccessEntries(request.blacklist ?? []);
-        await this.tournamentRepository.createTournament(tournament);
         return toDetail(tournament, user);
     }
 
@@ -697,39 +685,11 @@ export class TournamentService {
                     : [];
             }
 
-            if (tournament.kind === `official`) {
-                tournament.visibility = `public`;
-            } else {
-                tournament.isPublished = tournament.visibility === `public`;
-            }
+            tournament.kind = `community`;
+            tournament.isPublished = tournament.visibility === `public`;
 
             tournament.updatedAt = Date.now();
             tournament.activity.unshift(createTournamentActivity(user, `tournament-updated`, `Updated tournament settings.`));
-            await this.tournamentRepository.saveTournament(tournament);
-            return tournament;
-        });
-
-        this.broadcastTournamentUpdate(tournament);
-        return toDetail(tournament, user);
-    }
-
-    async publishTournament(tournamentId: string, user: AccountUserProfile): Promise<TournamentDetail> {
-        const tournament = await this.withTournamentLock(tournamentId, async () => {
-            const tournament = await this.requireTournament(tournamentId);
-            this.assertCanManageTournament(user, tournament);
-
-            if (tournament.kind !== `official`) {
-                throw new SessionError(`Only official tournaments require publishing.`);
-            }
-
-            if (tournament.status !== `draft`) {
-                throw new SessionError(`Only draft tournaments can be published.`);
-            }
-
-            tournament.status = `registration-open`;
-            tournament.isPublished = true;
-            tournament.updatedAt = Date.now();
-            tournament.activity.unshift(createTournamentActivity(user, `tournament-published`, `Published the tournament and opened registration.`));
             await this.tournamentRepository.saveTournament(tournament);
             return tournament;
         });
@@ -1270,11 +1230,7 @@ export class TournamentService {
         }
     }
 
-    private buildTournamentRecord(
-        kind: TournamentRecord[`kind`],
-        user: AccountUserProfile,
-        request: CreateTournamentRequest,
-    ): TournamentRecord {
+    private buildTournamentRecord(user: AccountUserProfile, request: CreateTournamentRequest): TournamentRecord {
         const now = Date.now();
         const format = request.format ?? `double-elimination`;
 
@@ -1292,11 +1248,11 @@ export class TournamentService {
             id: randomUUID(),
             name: request.name,
             description: normalizeDescription(request.description),
-            kind,
+            kind: `community`,
             format,
-            visibility: kind === `official` ? `public` : request.visibility,
-            status: kind === `official` ? `draft` : `registration-open`,
-            isPublished: kind === `community` && request.visibility === `public`,
+            visibility: request.visibility,
+            status: `registration-open`,
+            isPublished: request.visibility === `public`,
             scheduledStartAt: request.scheduledStartAt,
             checkInWindowMinutes: request.checkInWindowMinutes,
             checkInOpensAt: Math.max(0, request.scheduledStartAt - request.checkInWindowMinutes * 60_000),
@@ -1331,9 +1287,7 @@ export class TournamentService {
                 createTournamentActivity(
                     user,
                     `tournament-created`,
-                    kind === `official`
-                        ? `Created a new official tournament draft.`
-                        : `Created a new community tournament.`,
+                    `Created a new tournament.`,
                 ),
             ],
         };

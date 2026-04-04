@@ -28,8 +28,8 @@ export async function searchTournamentPlayers(query: string) {
     return await fetchJson<UserSearchResponse>(`/api/users/search?q=${encodeURIComponent(query)}`);
 }
 
-export async function createCommunityTournament(request: CreateTournamentRequest) {
-    const tournament = await fetchJson<TournamentDetail>(`/api/tournaments/community`, {
+export async function createTournament(request: CreateTournamentRequest) {
+    const tournament = await fetchJson<TournamentDetail>(`/api/tournaments`, {
         method: `POST`,
         headers: {
             'Content-Type': `application/json`,
@@ -59,12 +59,6 @@ export async function updateTournament(tournamentId: string, request: UpdateTour
             'Content-Type': `application/json`,
         },
         body: JSON.stringify(request),
-    });
-}
-
-export async function publishTournament(tournamentId: string) {
-    return await writeTournamentMutation(`/api/tournaments/${encodeURIComponent(tournamentId)}/publish`, {
-        method: `POST`,
     });
 }
 

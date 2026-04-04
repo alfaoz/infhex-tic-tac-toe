@@ -17,7 +17,6 @@ import {
     checkInTournament,
 
     grantTournamentOrganizer,
-    publishTournament,
     registerForTournament,
     removeFromAccessList,
     removeTournamentParticipant,
@@ -1361,15 +1360,6 @@ function TournamentRoute() {
                             {/* Organizer buttons */}
                             {t.viewer.canManage && (
                                 <div className="ml-auto flex items-center gap-2">
-                                    {t.status === `draft` && (
-                                        <button
-                                            onClick={() => void run(() => publishTournament(t.id), `Published.`)} disabled={busy}
-                                            className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1.5 text-[10px] font-semibold uppercase text-sky-200 transition hover:bg-sky-400/20 disabled:opacity-50"
-                                        >
-                                            Publish
-                                        </button>
-                                    )}
-
                                     {t.status === `check-in-open` && (
                                         <button
                                             onClick={() => void run(() => startTournament(t.id), `Started.`)} disabled={busy}
@@ -1565,11 +1555,9 @@ function TournamentRoute() {
                 {t && (
                     <TournamentEditorCard
                         formKey={`${t.id}:${t.updatedAt}`} title="Settings" description=""
-                        defaultKind={t.kind}
                         defaultRequest={buildCreateTournamentRequestFromDetail(t)}
-                        allowOfficial={false}
-                        disableKind submitLabel="Save" submitting={busy}
-                        onSubmit={(p) => void run(() => updateTournament(t.id, p.request), `Updated.`).then(() => setEditOpen(false))}
+                        submitLabel="Save" submitting={busy}
+                        onSubmit={(request) => void run(() => updateTournament(t.id, request), `Updated.`).then(() => setEditOpen(false))}
                     />
                 )}
             </Modal>

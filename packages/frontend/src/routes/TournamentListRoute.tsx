@@ -9,7 +9,7 @@ import TournamentEditorCard, { createDefaultTournamentRequest } from '../compone
 import { useQueryAccount } from '../query/accountClient';
 import { createQuickSealBotTournament, seedTournamentWithDevUsers } from '../query/devAuthClient';
 import {
-    createCommunityTournament,
+    createTournament,
     startTournament,
     unsubscribeFromTournament,
     useQueryTournaments,
@@ -288,10 +288,10 @@ function TournamentListRoute() {
     const tournaments = data?.tournaments ?? [];
     const upcomingMatches = data?.upcomingMatches ?? [];
 
-    const handleCreate = async (payload: { kind: `official` | `community`; request: CreateTournamentRequest }) => {
+    const handleCreate = async (request: CreateTournamentRequest) => {
         try {
             setSubmitting(true);
-            const t = await createCommunityTournament(payload.request);
+            const t = await createTournament(request);
             void nav(`/tournaments/${t.id}`);
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : `Failed to create tournament.`, { toastId: `create-err` });
@@ -324,7 +324,7 @@ function TournamentListRoute() {
                 seriesSettings: { earlyRoundsBestOf: 1, finalsBestOf: 3, grandFinalBestOf: 5, grandFinalResetEnabled: true },
                 matchJoinTimeoutMinutes: 5,
             };
-            const t = await createCommunityTournament(request);
+            const t = await createTournament(request);
             toast.info(`Created. Seeding 256 players...`, { toastId: `quick-create` });
             await seedTournamentWithDevUsers(t.id, { count: 256, state: `checked-in` });
             toast.info(`Seeded. Starting...`, { toastId: `quick-create` });
@@ -463,12 +463,9 @@ function TournamentListRoute() {
                                         <TournamentEditorCard
                                             formKey="create" title="New Tournament"
                                             description=""
-                                            defaultKind="community"
                                             defaultRequest={{ ...createDefaultTournamentRequest(), visibility: `private` }}
-                                            allowOfficial={false}
-                                            disableKind
                                             submitLabel="Create" submitting={submitting}
-                                            onSubmit={(payload) => void handleCreate(payload)}
+                                            onSubmit={(request) => void handleCreate(request)}
                                         />
                                         <button
                                             type="button" onClick={() => setShowCreateForm(false)}

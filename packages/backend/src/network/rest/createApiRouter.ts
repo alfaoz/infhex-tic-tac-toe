@@ -428,36 +428,16 @@ export class ApiRouter {
             });
         }
 
-        router.post(`/tournaments/community`, express.json(), async (req, res) => {
+        router.post(`/tournaments`, express.json(), async (req, res) => {
             const user = await this.authService.getUserFromRequest(req);
             if (!user) {
-                res.status(401).json({ error: `Sign in with Discord to create community tournaments.` });
+                res.status(401).json({ error: `Sign in with Discord to create tournaments.` });
                 return;
             }
 
             try {
                 const request = zCreateTournamentRequest.parse(req.body ?? {});
-                res.json(await this.tournamentService.createCommunityTournament(user, request));
-            } catch (error: unknown) {
-                if (error instanceof SessionError) {
-                    res.status(409).json({ error: error.message });
-                    return;
-                }
-
-                throw error;
-            }
-        });
-
-        router.post(`/tournaments/official`, express.json(), async (req, res) => {
-            const user = await this.authService.getUserFromRequest(req);
-            if (!user) {
-                res.status(401).json({ error: `Sign in with Discord to create official tournaments.` });
-                return;
-            }
-
-            try {
-                const request = zCreateTournamentRequest.parse(req.body ?? {});
-                res.json(await this.tournamentService.createOfficialTournament(user, request));
+                res.json(await this.tournamentService.createTournament(user, request));
             } catch (error: unknown) {
                 if (error instanceof SessionError) {
                     res.status(409).json({ error: error.message });
@@ -478,25 +458,6 @@ export class ApiRouter {
             try {
                 const request = zUpdateTournamentRequest.parse(req.body ?? {});
                 res.json(await this.tournamentService.updateTournament(req.params.tournamentId, user, request));
-            } catch (error: unknown) {
-                if (error instanceof SessionError) {
-                    res.status(409).json({ error: error.message });
-                    return;
-                }
-
-                throw error;
-            }
-        });
-
-        router.post(`/tournaments/:tournamentId/publish`, async (req, res) => {
-            const user = await this.authService.getUserFromRequest(req);
-            if (!user) {
-                res.status(401).json({ error: `Sign in with Discord to publish tournaments.` });
-                return;
-            }
-
-            try {
-                res.json(await this.tournamentService.publishTournament(req.params.tournamentId, user));
             } catch (error: unknown) {
                 if (error instanceof SessionError) {
                     res.status(409).json({ error: error.message });

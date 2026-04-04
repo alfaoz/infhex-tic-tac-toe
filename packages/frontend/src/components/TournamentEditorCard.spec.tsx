@@ -42,7 +42,7 @@ test(`submits 256-player elimination tournaments without shrinking the bracket`,
             }}
             submitLabel="Save"
             submitting={false}
-            onSubmit={({ request }) => {
+            onSubmit={(request) => {
                 submitted = request;
             }}
         />,
@@ -68,7 +68,7 @@ test(`submits 256-player swiss tournaments without clamping to 128`, async ({ mo
             }}
             submitLabel="Save"
             submitting={false}
-            onSubmit={({ request }) => {
+            onSubmit={(request) => {
                 submitted = request;
             }}
         />,

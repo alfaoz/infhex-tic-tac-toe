@@ -3,7 +3,6 @@ import type {
     TournamentDetail,
     TournamentFormat,
     TournamentGameTimeControl,
-    TournamentKind,
     TournamentSeriesBestOf,
 } from '@ih3t/shared';
 import { TOURNAMENT_BRACKET_SIZES, TOURNAMENT_SERIES_BEST_OF_VALUES } from '@ih3t/shared';
@@ -13,13 +12,10 @@ type TournamentEditorCardProps = {
     formKey: string
     title: string
     description: string
-    defaultKind?: TournamentKind
     defaultRequest: CreateTournamentRequest
-    allowOfficial?: boolean
-    disableKind?: boolean
     submitLabel: string
     submitting: boolean
-    onSubmit: (payload: { kind: TournamentKind; request: CreateTournamentRequest }) => void
+    onSubmit: (request: CreateTournamentRequest) => void
 };
 
 type TournamentFormState = {
@@ -282,21 +278,18 @@ function TournamentEditorCard({
                 : { mode: `unlimited` };
 
         onSubmit({
-            kind: `community`,
-            request: {
-                name: f.name.trim(), description: f.description.trim() || undefined,
-                format: f.format, visibility: f.visibility as CreateTournamentRequest[`visibility`],
-                scheduledStartAt: startAt, checkInWindowMinutes: Math.max(5, ciw || 30),
-                maxPlayers: mp,
-                swissRoundCount: sr, timeControl: tc,
-                seriesSettings: { earlyRoundsBestOf: bo(f.earlyRoundsBestOf), finalsBestOf: bo(f.finalsBestOf), grandFinalBestOf: bo(f.grandFinalBestOf), grandFinalResetEnabled: f.grandFinalResetEnabled },
-                matchJoinTimeoutMinutes: Math.max(0, Math.min(30, Number.parseInt(f.matchJoinTimeoutMinutes, 10) || 0)),
-                lateRegistrationEnabled: f.lateRegistrationEnabled,
-                thirdPlaceMatchEnabled: f.format === `single-elimination` ? f.thirdPlaceMatchEnabled : false,
-                roundDelayMinutes: Math.max(0, Math.min(60, Number.parseInt(f.roundDelayMinutes, 10) || 0)),
-                waitlistEnabled: f.waitlistEnabled,
-                waitlistCheckInMinutes: f.waitlistEnabled ? Math.max(1, Math.min(30, Number.parseInt(f.waitlistCheckInMinutes, 10) || 5)) : undefined,
-            },
+            name: f.name.trim(), description: f.description.trim() || undefined,
+            format: f.format, visibility: f.visibility as CreateTournamentRequest[`visibility`],
+            scheduledStartAt: startAt, checkInWindowMinutes: Math.max(5, ciw || 30),
+            maxPlayers: mp,
+            swissRoundCount: sr, timeControl: tc,
+            seriesSettings: { earlyRoundsBestOf: bo(f.earlyRoundsBestOf), finalsBestOf: bo(f.finalsBestOf), grandFinalBestOf: bo(f.grandFinalBestOf), grandFinalResetEnabled: f.grandFinalResetEnabled },
+            matchJoinTimeoutMinutes: Math.max(0, Math.min(30, Number.parseInt(f.matchJoinTimeoutMinutes, 10) || 0)),
+            lateRegistrationEnabled: f.lateRegistrationEnabled,
+            thirdPlaceMatchEnabled: f.format === `single-elimination` ? f.thirdPlaceMatchEnabled : false,
+            roundDelayMinutes: Math.max(0, Math.min(60, Number.parseInt(f.roundDelayMinutes, 10) || 0)),
+            waitlistEnabled: f.waitlistEnabled,
+            waitlistCheckInMinutes: f.waitlistEnabled ? Math.max(1, Math.min(30, Number.parseInt(f.waitlistCheckInMinutes, 10) || 5)) : undefined,
         });
     };
 
