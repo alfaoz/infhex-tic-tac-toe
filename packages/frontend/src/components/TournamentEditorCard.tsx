@@ -150,6 +150,8 @@ export function createDefaultTournamentRequest(): CreateTournamentRequest {
         maxPlayers: 16,
         timeControl: { mode: `turn`, turnTimeMs: 45_000 },
         seriesSettings: { earlyRoundsBestOf: 1, finalsBestOf: 3, grandFinalBestOf: 5, grandFinalResetEnabled: true },
+        matchJoinTimeoutMinutes: 5,
+        matchExtensionMinutes: 5,
     };
 }
 
@@ -190,8 +192,8 @@ function init(r: CreateTournamentRequest): TournamentFormState {
         finalsBestOf: String(r.seriesSettings.finalsBestOf),
         grandFinalBestOf: String(r.seriesSettings.grandFinalBestOf),
         grandFinalResetEnabled: r.seriesSettings.grandFinalResetEnabled,
-        matchJoinTimeoutMinutes: String(r.matchJoinTimeoutMinutes ?? 0),
-        matchExtensionMinutes: String(r.matchExtensionMinutes ?? r.matchJoinTimeoutMinutes ?? 0),
+        matchJoinTimeoutMinutes: String(r.matchJoinTimeoutMinutes ?? 5),
+        matchExtensionMinutes: String(r.matchExtensionMinutes ?? r.matchJoinTimeoutMinutes ?? 5),
         lateRegistrationEnabled: r.lateRegistrationEnabled ?? false,
         thirdPlaceMatchEnabled: r.thirdPlaceMatchEnabled ?? false,
         roundDelayMinutes: String(r.roundDelayMinutes ?? 0),

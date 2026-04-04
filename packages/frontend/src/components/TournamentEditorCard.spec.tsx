@@ -108,7 +108,7 @@ test(`preserves a zero join timeout when editing an existing tournament`, async 
 });
 
 test(`maps join timeout and extension settings from tournament detail into the edit request`, async () => {
-    const { buildCreateTournamentRequestFromDetail } = await import(`./TournamentEditorCard`);
+    const { buildCreateTournamentRequestFromDetail, createDefaultTournamentRequest } = await import(`./TournamentEditorCard`);
     const request = buildCreateTournamentRequestFromDetail({
         id: `tournament-1`,
         name: `Test Tournament`,
@@ -176,4 +176,8 @@ test(`maps join timeout and extension settings from tournament detail into the e
     expect(request.matchJoinTimeoutMinutes).toBe(9);
     expect(request.matchExtensionMinutes).toBe(4);
     expect(request.lateRegistrationEnabled).toBe(true);
+
+    const defaultRequest = createDefaultTournamentRequest();
+    expect(defaultRequest.matchJoinTimeoutMinutes).toBe(5);
+    expect(defaultRequest.matchExtensionMinutes).toBe(5);
 });
